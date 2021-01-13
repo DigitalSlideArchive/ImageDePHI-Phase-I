@@ -1,4 +1,4 @@
-# imagedephi
+# ImageDePHI
 
 ## Project setup
 ```
