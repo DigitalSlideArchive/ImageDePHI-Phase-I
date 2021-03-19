@@ -1,0 +1,34 @@
+{
+  "name": "imagedephi",
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "serve": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.0.5"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^4.18.0",
+    "@typescript-eslint/parser": "^4.18.0",
+    "@vitejs/plugin-vue": "^1.1.5",
+    "@vue/compiler-sfc": "^3.0.5",
+    "@vue/eslint-config-typescript": "^7.0.0",
+    "autoprefixer": "^10.2.5",
+    "eslint": "^7.22.0",
+    "eslint-config-airbnb-base": "^14.2.1",
+    "eslint-config-prettier": "^8.1.0",
+    "eslint-plugin-import": "^2.22.1",
+    "eslint-plugin-jsx-a11y": "^6.4.1",
+    "eslint-plugin-prettier": "^3.3.1",
+    "eslint-plugin-react-hooks": "^1.7.0",
+    "eslint-plugin-vue": "^7.7.0",
+    "postcss": "^8.2.8",
+    "prettier": "^2.2.1",
+    "tailwindcss": "^2.0.4",
+    "typescript": "^4.1.3",
+    "vite": "^2.1.0",
+    "vue-tsc": "^0.0.8"
+  }
+}
