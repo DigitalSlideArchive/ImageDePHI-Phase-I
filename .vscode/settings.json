@@ -8,6 +8,9 @@
   "[vue]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
+  "[vue-html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
   "[json]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
@@ -27,7 +30,7 @@
   "eslint.format.enable": true,
   "eslint.lintTask.enable": true,
   "eslint.validate": ["javascript", "javascriptreact", "vue"],
-  "volar.tsPlugin": true,
+  "eslint.options": { "configFile": ".eslintrc.js" },
   "tailwindCSS.emmetCompletions": true,
   "editor.quickSuggestions": {
     "strings": true
@@ -35,5 +38,8 @@
   "tailwindCSS.includeLanguages": {
     "vue": "html",
     "vue-html": "html"
-  }
+  },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "volar.tsPlugin": true,
+  "volar.tsPluginStatus": false
 }

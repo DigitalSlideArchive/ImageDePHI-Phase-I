@@ -1,15 +1,40 @@
 module.exports = {
-  ignorePatterns: ['vite.config.ts'],
   root: true,
+  plugins: ['vue', 'import', 'simple-import-sort', '@typescript-eslint'],
   env: {
     node: true,
   },
   extends: [
-    'airbnb-base/legacy',
+    'airbnb-typescript/base',
     'plugin:vue/vue3-recommended',
-    'eslint:recommended',
-    '@vue/typescript',
-    'plugin:prettier/recommended',
+    'prettier',
   ],
-  plugins: ['vue', 'prettier'],
+  overrides: [
+    {
+      files: ['*.vue'],
+      rules: {
+        indent: 'off',
+      },
+    },
+    {
+      files: ['**.js'],
+      parser: 'vue-eslint-parser',
+    },
+  ],
+  rules: {
+    'sort-vars': 'error',
+    'simple-import-sort/imports': 'error',
+    'simple-import-sort/exports': 'error',
+  },
+  parserOptions: {
+    tsconfigRootDir: __dirname,
+    parser: '@typescript-eslint/parser',
+    project: 'tsconfig.json',
+    extraFileExtensions: ['.vue'],
+  },
+  settings: {
+    'import/resolver': {
+      typescript: { alwaysTryTypes: true },
+    },
+  },
 };
