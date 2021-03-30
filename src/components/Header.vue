@@ -1,17 +1,8 @@
 <template>
-  <!-- <div class="container">
-    <p>
-      <router-link to="/5fa5809c4117741d21eb08e9">Sample</router-link>
-    </p>
-    <router-view></router-view>
-  </div> -->
-  <Header title="ImageDePHI"></Header>
   <header
     class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow"
   >
-    <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3" href="#"
-      >Company name</a
-    >
+    <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3" href="#">{{ title }}</a>
     <button
       class="navbar-toggler position-absolute d-md-none collapsed"
       type="button"
@@ -38,11 +29,12 @@
 </template>
 
 <script lang="ts">
-  import Header from 'src/components';
   import { defineComponent } from 'vue';
 
   export default defineComponent({
-    name: 'App',
-    components: [Header],
+    name: 'Header',
+    props: { title: { type: String, required: true } },
+    emits: [],
+    methods: {},
   });
 </script>

@@ -1,5 +1,5 @@
-import type { FeatureCollection } from 'geojson';
 import ky from 'ky';
+import type { GeoJSON, TileMetadata } from 'src/types';
 
 class Endpoint<T> {
   route: string;
@@ -13,15 +13,7 @@ class Endpoint<T> {
   }
 }
 
-export interface TileMetadata {
-  levels: number;
-  sizeX: number;
-  sizeY: number;
-  tileWidth: number;
-  tileHeight: number;
-}
-
-export const api = {
-  geojson: (id: string) => new Endpoint<FeatureCollection>(`item/${id}/tiles`),
+export default {
+  geojson: (id: string) => new Endpoint<GeoJSON>(`item/${id}/tiles`),
   tileMetadata: (id: string) => new Endpoint<TileMetadata>(`item/${id}/tiles`),
 };

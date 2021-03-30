@@ -25,6 +25,8 @@ module.exports = {
     'sort-vars': 'error',
     'simple-import-sort/imports': 'error',
     'simple-import-sort/exports': 'error',
+    'simple-import-sort/exports': 'error',
+    'vue/no-mutating-props': 'off',
   },
   parserOptions: {
     tsconfigRootDir: __dirname,
