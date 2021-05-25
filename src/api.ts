@@ -1,5 +1,5 @@
 import ky from 'ky';
-import type { GeoJSON, TileMetadata } from 'src/types';
+import type { GirderKeyspace, TileMetadata } from 'src/types';
 
 class Endpoint<T> {
   route: string;
@@ -11,9 +11,17 @@ class Endpoint<T> {
   fetch(): Promise<T> {
     return ky.get(this.route).json();
   }
+
+  put(json: T) {
+    return ky.put(this.route, { json });
+  }
 }
 
 export default {
-  geojson: (id: string) => new Endpoint<GeoJSON>(`item/${id}/tiles`),
+  geojson: (id: string) => new Endpoint<GirderKeyspace>(`item/${id}`),
   tileMetadata: (id: string) => new Endpoint<TileMetadata>(`item/${id}/tiles`),
+  relatedImageURLs: (id: string) =>
+    new Endpoint<Array<String>>(`item/${id}/tiles/images`),
+  putgeojson: (id: string) =>
+    new Endpoint<GirderKeyspace>(`item/${id}/metadata`),
 };

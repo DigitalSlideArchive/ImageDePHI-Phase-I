@@ -5,22 +5,16 @@ body {
   font-size: 0.875rem;
 }
 
-.feather {
-  width: 16px;
-  height: 16px;
-  vertical-align: text-bottom;
-}
-
 /*
-   * Sidebar
-   */
+ * Sidebar
+ */
 
 .sidebar {
   position: fixed;
   top: 0;
   /* rtl:raw:
-    right: 0;
-    */
+  right: 0;
+  */
   bottom: 0;
   /* rtl:remove */
   left: 0;
@@ -69,8 +63,8 @@ body {
 }
 
 /*
-   * Navbar
-   */
+ * Navbar
+ */
 
 .navbar-brand {
   padding-top: 0.75rem;

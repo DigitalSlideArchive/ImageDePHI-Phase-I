@@ -6,77 +6,26 @@
     <div class="position-sticky pt-3">
       <ul class="nav flex-column">
         <li class="nav-item">
-          <a class="nav-link active" aria-current="page" href="#">
-            <span data-feather="home"></span>
-            Dashboard
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="#">
-            <span data-feather="file"></span>
-            Orders
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="#">
-            <span data-feather="shopping-cart"></span>
-            Products
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="#">
-            <span data-feather="users"></span>
-            Customers
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="#">
-            <span data-feather="bar-chart-2"></span>
-            Reports
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="#">
-            <span data-feather="layers"></span>
-            Integrations
-          </a>
+          <router-link class="nav-link" to="/"
+            ><i class="bi bi-house-door"></i> Home</router-link
+          >
+          <router-link class="nav-link" to="/login"
+            ><i class="bi bi-key"></i> Login</router-link
+          >
+          <router-link class="nav-link" to="/5fa5809c4117741d21eb08e9"
+            ><i class="bi bi-gear"></i> Sample Annotator</router-link
+          >
         </li>
       </ul>
-
       <h6
         class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted"
       >
         <span>Saved reports</span>
-        <a class="link-secondary" href="#" aria-label="Add a new report">
-          <span data-feather="plus-circle"></span>
+        <a class="link-secondary" href="#" aria-label="Add a new report"
+          ><i class="bi bi-plus-circle"></i>
         </a>
       </h6>
-      <ul class="nav flex-column mb-2">
-        <li class="nav-item">
-          <a class="nav-link" href="#">
-            <span data-feather="file-text"></span>
-            Current month
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="#">
-            <span data-feather="file-text"></span>
-            Last quarter
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="#">
-            <span data-feather="file-text"></span>
-            Social engagement
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="#">
-            <span data-feather="file-text"></span>
-            Year-end sale
-          </a>
-        </li>
-      </ul>
+      <ul class="nav flex-column mb-2"></ul>
     </div>
   </nav>
 </template>

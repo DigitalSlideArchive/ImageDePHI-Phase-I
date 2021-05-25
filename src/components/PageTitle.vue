@@ -26,7 +26,7 @@
   import { defineComponent } from 'vue';
 
   export default defineComponent({
-    name: 'PageHeader',
+    name: 'PageTitle',
     props: { title: { type: String, required: true } },
     emits: [],
     methods: {},

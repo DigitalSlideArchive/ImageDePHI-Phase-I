@@ -1,48 +1,24 @@
 <template>
-  <!-- <div class="container">
-    <p>
-      <router-link to="/5fa5809c4117741d21eb08e9">Sample</router-link>
-    </p>
-    <router-view></router-view>
-  </div> -->
   <Header title="ImageDePHI"></Header>
-  <header
-    class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow"
-  >
-    <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3" href="#"
-      >Company name</a
-    >
-    <button
-      class="navbar-toggler position-absolute d-md-none collapsed"
-      type="button"
-      data-bs-toggle="collapse"
-      data-bs-target="#sidebarMenu"
-      aria-controls="sidebarMenu"
-      aria-expanded="false"
-      aria-label="Toggle navigation"
-    >
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <input
-      class="form-control form-control-dark w-100"
-      type="text"
-      placeholder="Search"
-      aria-label="Search"
-    />
-    <ul class="navbar-nav px-3">
-      <li class="nav-item text-nowrap">
-        <a class="nav-link" href="#">Sign out</a>
-      </li>
-    </ul>
-  </header>
+  <div class="container-fluid">
+    <div class="row">
+      <Sidebar></Sidebar>
+      <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+        <PageTitle title="Item #5fa5809c4117741d21eb08e9"></PageTitle>
+        <router-view></router-view>
+      </main>
+    </div>
+  </div>
 </template>
 
 <script lang="ts">
-  import Header from 'src/components';
+  import Header from 'src/components/Header.vue';
+  import PageTitle from 'src/components/PageTitle.vue';
+  import Sidebar from 'src/components/Sidebar.vue';
   import { defineComponent } from 'vue';
 
   export default defineComponent({
     name: 'App',
-    components: [Header],
+    components: { Header, Sidebar, PageTitle },
   });
 </script>

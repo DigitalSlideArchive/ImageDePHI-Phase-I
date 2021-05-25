@@ -2,21 +2,26 @@
   <div class="row">
     <div class="col">
       <div class="card">
-        <h5 class="card-header">Item #{{ itemId }}</h5>
         <div class="card-body">
           <div class="row">
             <div class="col"><div id="map" style="height: 800px"></div></div>
             <div class="col border-start">
               <AnnotatorRedactionList
                 :features="geojson.features"
-                :is-editing="isEdititing"
-                @update-feature-name="handleFeatureNameUpdate"
-                @update-feature-description="handleFeatureDescriptionUpdate"
-                @begin-feature-editing="handleBeginEdit"
-                @end-feature-editing="handleEndEdit"
+                :is-editting="isEditting"
+                :is-creating="isCreating"
+                :currently-editting-index="currentlyEdittingIndex"
+                @update-name="handleFeatureNameUpdate"
+                @update-description="handleFeatureDescriptionUpdate"
+                @begin-edit="handleBeginEdit"
+                @end-edit="handleEndEdit"
                 @create-annotation="handleNewAnnotation"
+                @delete-feature="handleDeleteFeature"
               ></AnnotatorRedactionList>
             </div>
+          </div>
+          <div class="row border-top">
+            <Carousel :image-urls="relatedImageUrls"></Carousel>
           </div>
         </div>
       </div>
@@ -28,12 +33,13 @@
   import geo from 'geojs';
   import api from 'src/api';
   import AnnotatorRedactionList from 'src/components/AnnotatorRedactionList.vue';
+  import Carousel from 'src/components/Carousel.vue';
   import { GeoJSON, TileMetadata } from 'src/types';
   import { defineComponent, PropType } from 'vue';
 
   export default defineComponent({
     name: 'AnnotatorMap',
-    components: { AnnotatorRedactionList },
+    components: { AnnotatorRedactionList, Carousel },
     props: {
       itemId: {
         type: String,
@@ -47,13 +53,19 @@
         type: Object as PropType<GeoJSON>,
         required: true,
       },
+      relatedImageUrls: {
+        type: Object as PropType<Array<String>>,
+        required: true,
+      },
     },
     emits: ['update:geojson'],
     data() {
       return {
         map: geo.map,
         annotationLayer: geo.annotationLayer,
-        isEdititing: false as Number | Boolean,
+        isEditting: false,
+        isCreating: false,
+        currentlyEdittingIndex: 0,
       };
     },
     mounted() {
@@ -90,7 +102,8 @@
           (status.oldMode === 'polygon' || status.oldMode === 'edit')
         ) {
           this.$emit('update:geojson', this.annotationLayer.geojson());
-          this.isEdititing = false;
+          this.isEditting = false;
+          this.isCreating = false;
         }
       },
       handleFeatureNameUpdate(event) {
@@ -106,7 +119,7 @@
           .description(event.description);
         const geojson = this.annotationLayer.geojson();
         geojson.features.find(
-          (element) => element.properties.annotationId == event.id,
+          (element) => element.properties.annotationId === event.id,
         ).properties.description = event.description;
         this.$emit('update:geojson', geojson);
       },
@@ -114,18 +127,32 @@
         const annotation = this.annotationLayer.annotationById(event);
         this.annotationLayer.mode('edit', annotation);
         annotation.state('edit');
-        this.isEdititing = event;
+        this.isEditting = true;
+        this.isCreating = false;
+        this.currentlyEdittingIndex = event;
         this.annotationLayer.draw();
       },
       handleEndEdit(event) {
         this.annotationLayer.mode('done');
         this.annotationLayer.mode(null);
-        this.isEdititing = false;
+        this.isEditting = false;
+        this.isCreating = false;
         this.$emit('update:geojson', this.annotationLayer.geojson());
       },
       handleNewAnnotation(event) {
         this.annotationLayer.mode('polygon');
-        this.isEdititing = true;
+        this.isEditting = false;
+        this.isCreating = true;
+      },
+      handleDeleteFeature(event) {
+        const annotation = this.annotationLayer.annotationById(event);
+        this.annotationLayer.removeAnnotation(annotation);
+        this.annotationLayer.draw();
+        this.annotationLayer.mode('done');
+        this.annotationLayer.mode(null);
+        this.isEditting = false;
+        this.isCreating = false;
+        this.$emit('update:geojson', this.annotationLayer.geojson());
       },
     },
   });

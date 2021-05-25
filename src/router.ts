@@ -1,5 +1,6 @@
 import Home from 'src/views/Home.vue';
 import ItemDetail from 'src/views/ItemDetail.vue';
+import Login from 'src/views/Login.vue';
 import { createRouter, createWebHistory } from 'vue-router';
 
 const routes = [
@@ -13,6 +14,11 @@ const routes = [
     name: 'Item',
     component: ItemDetail,
     props: true,
+  },
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login,
   },
 ];
 

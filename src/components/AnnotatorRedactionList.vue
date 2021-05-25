@@ -4,52 +4,42 @@
       v-for="feature in features"
       :key="feature.properties.annotationId"
       class="list-group-item p-0"
-      @mouseover="
-        $emit('beginHoveringOverFeature', feature.properties.annotationId)
-      "
-      @mouseleave="
-        $emit('endHoveringOverFeature', feature.properties.annotationId)
-      "
     >
       <AnnotatorRedactionListItem
         :name="feature.properties.name"
         :description="feature.properties.description"
-        :is-editing="isEditing === feature.properties.annotationId"
-        @update-name="
-          $emit('updateFeatureName', {
-            id: feature.properties.annotationId,
-            name: $event,
-          })
-        "
-        @update-description="
-          $emit('updateFeatureDescription', {
-            id: feature.properties.annotationId,
-            description: $event,
-          })
-        "
-        @begin-editing="
-          $emit('beginFeatureEditing', feature.properties.annotationId)
-        "
-        @end-editing="
-          $emit('endFeatureEditing', feature.properties.annotationId)
-        "
+        :is-editting="isEditting"
+        :is-creating="isCreating"
+        :currently-editting-index="currentlyEdittingIndex"
+        :annotation-id="feature.properties.annotationId"
+        @update-name="$emit('updateName', $event)"
+        @update-description="$emit('updateDescription', $event)"
+        @begin-edit="$emit('beginEdit', $event)"
+        @end-edit="$emit('endEdit', $event)"
+        @delete-feature="$emit('deleteFeature', $event)"
       >
+        >
       </AnnotatorRedactionListItem>
     </li>
     <button
-      :disabled="!!isEditing"
+      :readonly="isEditting || isCreating"
+      :disabled="isEditting || isCreating"
       type="button"
-      class="list-group-item list-group-item-action text-center"
-      @click="handleClick"
+      class="list-group-item list-group-item-action bg-{{(isEditting || isCreating) ? 'primary' : 'blue-100' }} text-black text-center"
+      @click="$emit('createAnnotation')"
     >
-      Create new annotation
+      {{
+        isEditting || isCreating
+          ? 'Waiting to finish drawing...'
+          : 'Create new annotation'
+      }}
     </button>
   </ul>
 </template>
 
 <script lang="ts">
   import AnnotatorRedactionListItem from 'src/components/AnnotatorRedactionListItem.vue';
-  import { GeoJSON } from 'src/types';
+  import type { GeoJSON } from 'src/types';
   import { defineComponent, PropType } from 'vue';
 
   export default defineComponent({
@@ -60,24 +50,27 @@
         type: Object as PropType<Array<GeoJSON.Feature>>,
         required: true,
       },
-      isEditing: {
-        type: Boolean as PropType<Number | Boolean>,
+      isEditting: {
+        type: Boolean,
+        required: true,
+      },
+      isCreating: {
+        type: Boolean,
+        required: true,
+      },
+      currentlyEdittingIndex: {
+        type: Number,
         required: true,
       },
     },
     emits: [
-      'beginFeatureEditing',
-      'endFeatureEditing',
-      'updateFeatureName',
-      'updateFeatureDescription',
       'createAnnotation',
-      'beginHoveringOverFeature',
-      'endHoveringOverFeature',
+      'updateName',
+      'updateDescription',
+      'beginEdit',
+      'endEdit',
+      'deleteFeature',
     ],
-    methods: {
-      handleClick(event) {
-        this.$emit('createAnnotation');
-      },
-    },
+    methods: {},
   });
 </script>
