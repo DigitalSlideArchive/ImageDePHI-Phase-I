@@ -168,8 +168,6 @@
     },
     methods: {
       handleClick(event) {
-        console.log(event);
-
         if (this.currentlyEdittingIndex === this.annotationId) {
           this.$emit('endEdit', this.annotationId);
         } else {

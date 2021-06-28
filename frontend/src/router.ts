@@ -1,7 +1,8 @@
-import Home from 'src/views/Home.vue';
-import ItemDetail from 'src/views/ItemDetail.vue';
-import Login from 'src/views/Login.vue';
+import Home from './views/Home.vue';
+import ItemDetail from './views/ItemDetail.vue';
+import Login from './views/Login.vue';
 import { createRouter, createWebHistory } from 'vue-router';
+import store from './store';
 
 const routes = [
   {

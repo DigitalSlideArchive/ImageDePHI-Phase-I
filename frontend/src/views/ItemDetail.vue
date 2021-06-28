@@ -1,18 +1,18 @@
 <template>
+  <PageTitle :title="`Item #${itemId}`"></PageTitle>
   <div v-if="geojson && tileMetadata">
     <AnnotatorMap
       v-model:geojson="geojson"
       :tile-metadata="tileMetadata"
       :item-id="itemId"
-      :related-image-urls="relatedImageUrls"
     ></AnnotatorMap>
   </div>
 </template>
 
 <script lang="ts">
-  import api from 'src/api';
-  import AnnotatorMap from 'src/components/AnnotatorMap.vue';
-  import type { GeoJSON, TileMetadata } from 'src/types';
+  import api from '../api';
+  import AnnotatorMap from '../components/AnnotatorMap.vue';
+  import type { GeoJSON, TileMetadata } from '../types';
   import { defineComponent } from 'vue';
 
   export default defineComponent({
@@ -52,15 +52,6 @@
               features: [],
             };
           }
-        });
-      api
-        .relatedImageURLs(this.itemId)
-        .fetch()
-        .then((r) => {
-          this.relatedImageUrls = r.map(
-            (image) =>
-              `/api/v1/item/${this.itemId}/tiles/images/${image}?width=200&height=200`,
-          );
         });
     },
   });

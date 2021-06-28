@@ -1,20 +1,21 @@
 {
   "compilerOptions": {
-    "baseUrl": "node_modules",
-    "outDir": "dist",
-    "paths": {
-      "src/*": ["../src/*"]
-    },
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "node",
-    "strict": true,
     "jsx": "preserve",
     "sourceMap": true,
     "isolatedModules": true,
     "allowJs": true,
     "lib": ["esnext", "dom"],
-    "types": ["./src/shims-vue", "vite/client"],
+    "types": ["./src/shims-vue", "./src/vuex", "vite/client"],
     "typeRoots": ["@types"]
-  }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.js",
+    "src/**/*.d.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue"
+  ]
 }

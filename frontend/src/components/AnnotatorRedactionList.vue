@@ -34,12 +34,20 @@
           : 'Create new annotation'
       }}
     </button>
+    <button
+      v-if="!isEditting && !isCreating"
+      type="button"
+      class="btn btn-primary"
+      @click="$emit('downloadRedacted')"
+    >
+      Download redacted image
+    </button>
   </ul>
 </template>
 
 <script lang="ts">
-  import AnnotatorRedactionListItem from 'src/components/AnnotatorRedactionListItem.vue';
-  import type { GeoJSON } from 'src/types';
+  import AnnotatorRedactionListItem from './AnnotatorRedactionListItem.vue';
+  import type { GeoJSON } from '../types';
   import { defineComponent, PropType } from 'vue';
 
   export default defineComponent({
@@ -70,6 +78,7 @@
       'beginEdit',
       'endEdit',
       'deleteFeature',
+      'downloadRedacted',
     ],
     methods: {},
   });

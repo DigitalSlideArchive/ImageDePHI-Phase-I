@@ -21,7 +21,7 @@
             </div>
           </div>
           <div class="row border-top">
-            <Carousel :image-urls="relatedImageUrls"></Carousel>
+            <Carousel :item-id="itemId"></Carousel>
           </div>
         </div>
       </div>
@@ -31,10 +31,10 @@
 
 <script lang="ts">
   import geo from 'geojs';
-  import api from 'src/api';
-  import AnnotatorRedactionList from 'src/components/AnnotatorRedactionList.vue';
-  import Carousel from 'src/components/Carousel.vue';
-  import { GeoJSON, TileMetadata } from 'src/types';
+  import api from '../api';
+  import AnnotatorRedactionList from './AnnotatorRedactionList.vue';
+  import Carousel from './Carousel.vue';
+  import { GeoJSON, TileMetadata } from '../types';
   import { defineComponent, PropType } from 'vue';
 
   export default defineComponent({
@@ -51,10 +51,6 @@
       },
       geojson: {
         type: Object as PropType<GeoJSON>,
-        required: true,
-      },
-      relatedImageUrls: {
-        type: Object as PropType<Array<String>>,
         required: true,
       },
     },

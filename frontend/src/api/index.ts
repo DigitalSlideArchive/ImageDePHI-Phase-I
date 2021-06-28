@@ -1,5 +1,5 @@
-import ky from 'ky';
-import type { GirderKeyspace, TileMetadata } from 'src/types';
+import client from './client';
+import type { GirderKeyspace, TileMetadata } from '../types';
 
 class Endpoint<T> {
   route: string;
@@ -8,12 +8,12 @@ class Endpoint<T> {
     this.route = `/api/v1/${route}`;
   }
 
-  fetch(): Promise<T> {
-    return ky.get(this.route).json();
+  fetch(opt?: {}): Promise<T> {
+    return client().get(this.route, opt).json();
   }
 
   put(json: T) {
-    return ky.put(this.route, { json });
+    return client().put(this.route, { json });
   }
 }
 
@@ -24,4 +24,5 @@ export default {
     new Endpoint<Array<String>>(`item/${id}/tiles/images`),
   putgeojson: (id: string) =>
     new Endpoint<GirderKeyspace>(`item/${id}/metadata`),
+  login: () => new Endpoint('user/authentication'),
 };

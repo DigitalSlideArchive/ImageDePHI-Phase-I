@@ -10,9 +10,6 @@ export interface ConditionalServe {
 export default (o: ConditionalServe) => {
   const config: UserConfig = {
     plugins: [Vue()],
-    resolve: {
-      alias: [{ find: 'src', replacement: `${__dirname}/src` }],
-    },
   };
   // Add a proxy to the API server
   if (o.command === 'serve' && o.mode === 'development') {
@@ -20,7 +17,6 @@ export default (o: ConditionalServe) => {
       proxy: {
         '^/api/v1/.*': {
           target: 'http://localhost:8080',
-          changeOrigin: true,
         },
       },
     };
