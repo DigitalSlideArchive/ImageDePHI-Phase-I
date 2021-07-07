@@ -19,9 +19,7 @@ Install packages
 ```bash
 (venv) $ pip install --upgrade pip
 (venv) $ pip install wheel
-(venv) $ pip install numpy
-(venv) $ pip install pyvips
-(venv) $ pip install large_image[tiff,openslide,memcached]
+(venv) $ pip install tifftools pyvips
 ```
 
 Copy Vips header to environment
