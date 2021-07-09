@@ -1,6 +1,7 @@
 import json
+import shutil
 import time
-from typing import List
+from typing import List, BinaryIO
 import pyvips
 import tifftools
 from contextlib import contextmanager
@@ -14,17 +15,14 @@ class Polygon:
         self.line_width = line_width
 
 
-def progress_print(image, progress):
-    run = time.strftime('%M:%S', time.gmtime(progress.run))
-    eta = time.strftime('%M:%S', time.gmtime(progress.eta))
-    percent = progress.percent
-    total = progress.tpels
-    current = progress.npels
-    print(f'{percent:>3}% |{("=" * int(percent / 2)):<50}| [{run}<{eta}]', end='\r')
-
-
 @contextmanager
 def vips_progress(vips_image):
+    def progress_print(image, progress):
+        run = time.strftime('%M:%S', time.gmtime(progress.run))
+        eta = time.strftime('%M:%S', time.gmtime(progress.eta))
+        percent = progress.percent
+        print(f'{percent:>3}% |{("=" * int(percent / 2)):<50}| [{run}<{eta}]', end='\r')
+
     vips_image.set_progress(True)
     vips_image.signal_connect('preeval', progress_print)
     vips_image.signal_connect('eval', progress_print)
@@ -40,8 +38,37 @@ def get_tiff_tag(info, tag):
     return info['ifds'][0]['tags'][tag]['data']
 
 
-def write_svs(dest, src, offsets, lengths, srclen):
-    pass
+def write_svs(dest: BinaryIO, src: BinaryIO, svg: pyvips.Image, offsets: List[int], lengths: List[int], srclen: int):
+    COPY_CHUNKSIZE = 1024 ** 2
+
+    if len(offsets) != len(lengths):
+        raise Exception('Offsets and byte counts do not correspond')
+    
+    destOffsets = [0] * len(offsets)
+    # We preserve the order of the chunks from the original file
+    offsetList = sorted([(offset, idx) for idx, offset in enumerate(offsets)])
+    olidx = 0
+    while olidx < len(offsetList):
+        offset, idx = offsetList[olidx]
+        length = lengths[idx]
+        if offset and tifftools.tifftools.check_offset(srclen, offset, length):
+            src.seek(offset)
+            destOffsets[idx] = dest.tell()
+
+            while (olidx + 1 < len(offsetList) and
+                   offsetList[olidx + 1][0] == offsetList[olidx][0] + lengths[idx] and
+                   tifftools.tifftools.check_offset(srclen, offsetList[olidx + 1][0], lengths[offsetList[olidx + 1][1]])):
+                destOffsets[offsetList[olidx + 1][1]] = destOffsets[idx] + lengths[idx]
+                olidx += 1
+                offset, idx = offsetList[olidx]
+                length += lengths[idx]
+            while length:
+                data = src.read(min(length, COPY_CHUNKSIZE))
+                dest.write(data)
+                length -= len(data)
+        olidx += 1
+    return destOffsets
+
 
 
 def remove_polygons(input_filename: str, output_filename: str, polygons: List[Polygon]):
@@ -64,10 +91,13 @@ def remove_polygons(input_filename: str, output_filename: str, polygons: List[Po
     overlayImage = pyvips.Image.svgload_buffer(svgStr.encode())
     outputImage = sourceImage.composite([overlayImage], pyvips.BlendMode.OVER)
 
-    print(f'outputing to file: {output_filename}')
+    # TODO: replace with real tempfile and using block
+    tempfile = output_filename.replace('svs', 'tif')
+
+    print(f'outputing to file: {tempfile}')
     with vips_progress(outputImage):
         outputImage.write_to_file(
-            output_filename,
+            tempfile,
             tile=True,
             tile_width=tile_width,
             tile_height=tile_height,
@@ -77,7 +107,7 @@ def remove_polygons(input_filename: str, output_filename: str, polygons: List[Po
             Q=jpeg_quality
         )
     
-    output_info = tifftools.read_tiff(output_filename)
+    output_info = tifftools.read_tiff(tempfile)
     output_tile_height = get_tiff_tag(output_info, tifftools.Tag.TileHeight.value)[0]
     output_tile_width = get_tiff_tag(output_info, tifftools.Tag.TileWidth.value)[0]
     output_compression = get_tiff_tag(output_info, tifftools.Tag.Compression.value)[0]
@@ -90,15 +120,21 @@ def remove_polygons(input_filename: str, output_filename: str, polygons: List[Po
     if jpeg_tables != output_jpeg_tables:
         raise ValueError('Input JPEG Tables do not match output JPEG Tables')
     
-    with open(input_filename, 'rb') as input_file, open(output_filename, 'wb') as output_file:
+    output_tile_offsets = get_tiff_tag(output_info, tifftools.Tag.TileOffset.value)
+    output_tile_byte_counts = get_tiff_tag(output_info, tifftools.Tag.TileByteCounts.value)
+
+    print(f'copying input to file: {output_filename}')
+    shutil.copyfile(input_filename, output_filename)
+    
+    with open(tempfile, 'rb') as input_file, open(output_filename, 'wb') as output_file:
         pass
 
 
 if __name__ == '__main__':
-    base = './data/21912px'
-    input_filename = './data/21912px.svs'
-    output_filename = './data/21912px_out.tif'
-    annotation_filename = './data/21912px.json'
+    base = './downloads/21912px'
+    input_filename = './downloads/21912px.svs'
+    output_filename = './downloads/21912px_out.svs'
+    annotation_filename = './downloads/21912px.json'
 
     with open(annotation_filename, 'r') as f:
         data = json.load(f)
