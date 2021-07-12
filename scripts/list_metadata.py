@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import sys
 import tifftools
 from tifftools import Datatype
@@ -125,6 +126,8 @@ def unjson(meta):
 
 def list_metadata(args):
     meta = {}
+    if args.collection and os.path.exists(args.collection):
+        meta = json.load(open(args.collection))
     for src in args.source:
         if args.verbose:
             sys.stderr.write('%s\n' % src)
@@ -138,8 +141,14 @@ def list_metadata(args):
         meta = check_aperio(meta)
         meta = check_hamamatsu(meta)
         meta = check_imagej(meta)
+    if args.out:
+        outptr = open(args.out, 'w')
+    else:
+        outptr = sys.stdout
     for key, values in sorted(meta.items()):
-        print('%s: %s' % (key, values[0] if len(values) == 1 else values))
+        outptr.write('%s: %s\n' % (key, values[0] if len(values) == 1 else values))
+    if args.collection:
+        meta = json.dump(meta, open(args.collection, 'w'))
 
 
 if __name__ == '__main__':
@@ -147,6 +156,14 @@ if __name__ == '__main__':
         description='List all ASCII, Date, and som,e binary fields from TIFF files')
     parser.add_argument(
         'source', nargs='+', help='Source file.')
+    parser.add_argument(
+        '--collection',
+        help='A file path to read and write collected metadata.  Use this to '
+        'merge multiple runs of the program.')
+    parser.add_argument(
+        '--out',
+        help='If specified, output the results to this text file.  Otherwise, '
+        'output to stdout.')
     parser.add_argument(
         '--verbose', '-v', action='count', default=0, help='Increase output.')
     args = parser.parse_args()
