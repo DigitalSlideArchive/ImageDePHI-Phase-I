@@ -1,8 +1,7 @@
 import pytest
-
 from girder.plugin import loadedPlugins
 
 
-@pytest.mark.plugin('girder_imagedephi')
+@pytest.mark.plugin("imagedephi")
 def test_import(server):
-    assert 'girder_imagedephi' in loadedPlugins()
+    assert "imagedephi" in loadedPlugins()

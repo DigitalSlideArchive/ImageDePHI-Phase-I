@@ -1,8 +1,22 @@
 { pkgs ? import <nixpkgs> {} }:
 
-pkgs.python3Packages.buildPythonApplication {
-  pname = "myapp";
-  src = ./.;
-  version = "0.1";
-  propagatedBuildInputs = [ pkgs.python3Packages.flask ];
+let
+  packagejson = pkgs.lib.trivial.importJSON "package.json";
+in
+pkgs.stdenv.mkDerivation rec {
+  pname = packagejson.name;
+  version = packagejson.version;
+  buildInputs = [
+    pkgs.nodejs
+  ];
+
+  buildPhase = ''
+    npm ci
+    npm build
+  '';
+
+  installPhase = ''
+    mkdir -p $out/bin
+    mv chord $out/bin
+  '';
 }

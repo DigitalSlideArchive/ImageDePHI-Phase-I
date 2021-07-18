@@ -32,7 +32,6 @@ module.exports = {
     tsconfigRootDir: __dirname,
     parser: '@typescript-eslint/parser',
     project: 'tsconfig.json',
-    extraFileExtensions: ['.vue'],
   },
   settings: {
     'import/resolver': {

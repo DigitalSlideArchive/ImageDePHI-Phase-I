@@ -45,6 +45,7 @@
 
 <style>
   #carousel {
+    overflow-y: hidden;
     overflow-x: auto;
     white-space: nowrap;
   }
