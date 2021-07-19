@@ -107,7 +107,7 @@ def remove_polygons(input_filename: str, output_filename: str, polygons: List[Po
     if original_jpeg_tables != redacted_jpeg_tables:
         raise ValueError('Original JPEG Tables do not match redacted JPEG Tables')
 
-    tiff_utils.write_tiff_conditional(original_info['ifds'][:1] + redacted_info['ifds'][1:], output_filename, allowExisting=True)
+    tiff_utils.write_tiff_conditional(original_info['ifds'], redacted_info['ifds'], output_filename, overlayImage, True)
     return
 
     print('finding which tiles to redact')
@@ -138,10 +138,18 @@ def remove_polygons(input_filename: str, output_filename: str, polygons: List[Po
         )
 
 
-def redacted_list(svg: pyvips.Image, width: int, height: int, tile_width: int, tile_height: int, num_tiles: int):
-    is_redacted = []
+def redacted_list(
+    svg: pyvips.Image,
+    width: int,
+    height: int,
+    tile_width: int,
+    tile_height: int,
+    num_tiles: int
+) -> List[bool]:
+    is_redacted: List[bool] = []
     tiles_across = (width + tile_width - 1) // tile_width
     tiles_down = (height + tile_height - 1) // tile_height
+
     for i in trange(len(num_tiles)):
         x = (i % tiles_across) * tile_width
         y = (i // tiles_across) * tile_height

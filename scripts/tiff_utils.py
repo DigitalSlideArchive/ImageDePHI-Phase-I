@@ -3,33 +3,23 @@ import struct
 
 from typing import Dict, List, BinaryIO
 
+import pyvips
 from tifftools.constants import TiffConstant, TiffConstantSet, Datatype, Tag, get_or_create_tag
 from tifftools.exceptions import MustBeBigTiffException, TifftoolsException
 from tifftools.path_or_fobj import OpenPathOrFobj, is_filelike_object
-
-from tifftools.tifftools import write_tag_data, check_offset
+from tifftools.tifftools import write_tag_data, check_offset, write_ifd, write_sub_ifds
 
 from tqdm import trange
 
 
 def write_tiff_conditional(
-    ifds: List[Dict[str, dict]],
-    # original_ifds: List[Dict[str, dict]],
-    # redacted_ifds: List[Dict[str, dict]],
+    original_ifds: List[Dict[str, dict]],
+    redacted_ifds: List[Dict[str, dict]],
     path: str,
+    svg: pyvips.Image,
     allowExisting: bool = False
 ):
-    """
-    Write a tiff file based on data in a list of ifds. Always uses bigtiff.
-
-    :param original_ifds: either a list of ifds of the original image.
-    :param redacted_ifds: either a list of ifds of the redacted image.
-    :param original_path: output path or stream.
-    :param allowExisting: if False, raise an error if the path already exists.
-    """
-    # original_bigEndian = original_ifds[0].get('bigEndian', False)
-    # redacted_bigEndian = redacted_ifds[0].get('bigEndian', False)
-    bigEndian = ifds[0].get('bigEndian', False)
+    bigEndian = original_ifds[0].get('bigEndian', False)
 
     if not allowExisting and not is_filelike_object(path) and os.path.exists(path):
         raise TifftoolsException('File already exists')
@@ -40,34 +30,70 @@ def write_tiff_conditional(
         header += struct.pack(bom + 'HHHQ', 0x2B, 8, 0, 0)
         ifdPtr = len(header) - 8
         dest.write(header)
-        for ifd in ifds:
-            ifdPtr = write_ifd_conditional(dest, bom, ifd, ifdPtr)
+
+        ifdPtr = write_ifd_conditional(dest, bom, original_ifds[0], redacted_ifds[0], ifdPtr, svg)
+
+        for ifd in original_ifds[1:]:
+            ifdPtr = write_ifd(dest, bom, True, ifd, ifdPtr)
+
+
+def find_directory(
+    original_ifd: Dict[str, dict],
+    redacted_ifds: List[Dict[str, dict]],
+):
+    try:
+        original_tile_height = original_ifd['tags'][Tag.TileHeight.value]['data'][0]
+        original_tile_width = original_ifd['tags'][Tag.TileWidth.value]['data'][0]
+    except:
+        return None
+
+    for ifd in redacted_ifds:
+        tile_height = ifd['tags'][Tag.TileHeight.value]['data'][0]
+        tile_width = ifd['tags'][Tag.TileWidth.value]['data'][0]
+        if (tile_height, tile_width) == (original_tile_height, original_tile_width):
+            return ifd
+    return None
+
+def redacted_list(
+    svg: pyvips.Image,
+    width: int,
+    height: int,
+    tile_width: int,
+    tile_height: int,
+    num_tiles: int
+) -> List[bool]:
+    is_redacted: List[bool] = []
+    tiles_across = (width + tile_width - 1) // tile_width
+    tiles_down = (height + tile_height - 1) // tile_height
+
+    print('calculating redacted tiles')
+    for i in trange(num_tiles):
+        x = (i % tiles_across) * tile_width
+        y = (i // tiles_across) * tile_height
+        w = min(tile_width, width - x)
+        h = min(tile_height, height - y)
+        tile_max = svg.extract_area(x, y, w, h).extract_band(3).max()
+        is_redacted.append(tile_max > 0)
+
+    return is_redacted
 
 
 def write_ifd_conditional(
     dest: BinaryIO,
     bom: str,
     ifd: Dict[str, dict],
+    redacted_ifd: Dict[str, dict],
     ifdPtr: int,
-    tagSet: TiffConstantSet = Tag
+    svg: pyvips.Image
 ):
-    """
-    Write an IFD to a TIFF file. This copies image data from other tiff files. Always uses bigtiff.
-
-    :param dest: the open file handle to write.
-    :param bom: either '<' or '>' for using struct to encode values based on endian.
-    :param ifd: The ifd record. This requires the tags dictionary and the path value.
-    :param ifdPtr: a location to write the value of this ifd's start.
-    :param tagSet: the TiffConstantSet class to use for tags.
-
-    :return: the ifdPtr for the next ifd that could be written.
-    """
     ptrpack = 'Q'
     tagdatalen = 8
     dest.seek(0, os.SEEK_END)
     ifdrecord = struct.pack(bom + 'Q', len(ifd['tags']))
     subifdPtrs: Dict[TiffConstant, int] = {}
-    with OpenPathOrFobj(ifd['path_or_fobj'], 'rb') as src:
+    tagSet = Tag
+
+    with OpenPathOrFobj(ifd['path_or_fobj'], 'rb') as src, OpenPathOrFobj(redacted_ifd['path_or_fobj'], 'rb') as redacted_src:
         for tag, taginfo in sorted(ifd['tags'].items()):
             tag = get_or_create_tag(
                 tag,
@@ -83,9 +109,30 @@ def write_ifd_conditional(
             count = len(data)
 
             if tag.isOffsetData():
-                if isinstance(tag.bytecounts, str):
+                if tag.value == Tag.TileOffsets.value:
+                    width = ifd['tags'][Tag.ImageWidth.value]['data'][0]
+                    height = ifd['tags'][Tag.ImageHeight.value]['data'][0]
+                    tile_width = ifd['tags'][Tag.TileWidth.value]['data'][0]
+                    tile_height = ifd['tags'][Tag.TileHeight.value]['data'][0]
+                    num_tiles = len(data)
+                    is_redacted = redacted_list(svg, width, height, tile_width, tile_height, num_tiles)
+                    data = write_tag_data_conditional(
+                        dest,
+                        src,
+                        data,
+                        ifd['tags'][int(tagSet[tag.bytecounts])]['data'],
+                        ifd['size'],
+                        redacted_src,
+                        redacted_ifd['tags'][Tag.TileOffsets.value]['data'],
+                        redacted_ifd['tags'][Tag.TileByteCounts.value]['data'],
+                        redacted_ifd['size'],
+                        is_redacted
+                    )
+                elif isinstance(tag.bytecounts, str):
                     data = write_tag_data(
-                        dest, src, data,
+                        dest,
+                        src,
+                        data,
                         ifd['tags'][int(tagSet[tag.bytecounts])]['data'],
                         ifd['size']
                     )
@@ -128,6 +175,7 @@ def write_ifd_conditional(
     if pos % 2:
         dest.write(b'\x00')
         pos = dest.tell()
+
     dest.seek(ifdPtr)
     dest.write(struct.pack(bom + ptrpack, pos))
     dest.seek(0, os.SEEK_END)
@@ -138,19 +186,13 @@ def write_ifd_conditional(
     return nextifdPtr
 
 
-def write_sub_ifds_conditional(dest: BinaryIO, bom: str, ifd: Dict[str, dict], parentPos: int, subifdPtrs: Dict[TiffConstant, int]):
-    """
-    Write any number of SubIFDs to a TIFF file. These can be based on tags other than the SubIFD tag. Always uses bigtiff.
-
-    :param dest: the open file handle to write.
-    :param bom: eithter '<' or '>' for using struct to encode values based on endian.
-    :param ifd: The ifd record. This requires the tags dictionary and the path value.
-    :param parentPos: the location of the parent IFD used for relative storage locations.
-    :param: subifdPtrs: a dictionary with tags as the keys and value with either
-        (a) the absolute location to store the location of the first subifd, or
-        (b) a negative number whose absolute value is added to parentPos to get
-            the absolute location to store the location of the first subifd.
-    """
+def write_sub_ifds_conditional(
+    dest: BinaryIO,
+    bom: str,
+    ifd: Dict[str, dict],
+    parentPos: int,
+    subifdPtrs: Dict[TiffConstant, int]
+):
     tagdatalen = 8
     for tag, subifdPtr in subifdPtrs.items():
         if subifdPtr < 0:
@@ -176,22 +218,6 @@ def write_tag_data_conditional(
     redacted_srclen: int,
     is_redacted: List[bool],
 ):
-    """
-    Conditionally copy data from two source tiff to a destination tiff.
-
-    :param dest: the destination file, opened to the location to write.
-    :param original_src: the source file of the original image.
-    :param original_offsets: an array of offsets where data will be copied from.
-    :param original_lengths: an array of lengths to copy from each offset.
-    :param original_srclen: the length of the source file.
-    :param redacted_src: the source file of the redacted image.
-    :param redacted_offsets: an array of offsets where data will be copied from.
-    :param redacted_lengths: an array of lengths to copy from each offset.
-    :param redacted_srclen: the length of the source file.
-    :param is_redacted: an array of booleans specifying which src to copy from 
-
-    :return: the offsets in the destination file corresponding to the data copied.
-    """
     COPY_CHUNKSIZE = 1024 ** 2
 
     if len(original_offsets) != len(original_lengths) or len(redacted_offsets) != len(redacted_lengths):
@@ -201,13 +227,15 @@ def write_tag_data_conditional(
     original_offsetList = sorted([(offset, idx) for idx, offset in enumerate(original_offsets)])
     redacted_offsetList = sorted([(offset, idx) for idx, offset in enumerate(redacted_offsets)])
 
+    print('writing redacted files')
     for olidx in trange(len(original_offsetList)):
         if is_redacted[olidx]:
             offset, idx = redacted_offsetList[olidx]
             length = redacted_lengths[idx]
             if not check_offset(redacted_srclen, offset, length):
                 continue
-            src = redacted_src
+            # src = redacted_src
+            src = original_src
         else:
             offset, idx = original_offsetList[olidx]
             length = original_lengths[idx]
