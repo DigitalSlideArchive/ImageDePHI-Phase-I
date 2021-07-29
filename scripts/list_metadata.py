@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import sys
+
 import tifftools
 from tifftools import Datatype
 
@@ -153,7 +154,7 @@ def list_metadata(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='List all ASCII, Date, and som,e binary fields from TIFF files')
+        description='List all ASCII, Date, and some binary fields from TIFF files')
     parser.add_argument(
         'source', nargs='+', help='Source file.')
     parser.add_argument(
