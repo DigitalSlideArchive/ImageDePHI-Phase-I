@@ -1,0 +1,73 @@
+samples: True
+sample-collection: Sample Images
+sample-folder: Images
+admin:
+  login: admin
+  password: password
+  firstName: Admin
+  lastName: Admin
+  email: admin@nowhere.nil
+  public: True
+resources:
+  - model: collection
+    name: Redaction
+    creator: resource:admin
+    public: True
+  - model: folder
+    parent: resource:collection/Redaction
+    parentType: collection
+    name: Unprocessed
+    description: "Unredacted images"
+    creator: resource:admin
+    public: False
+  - model: folder
+    parent: resource:collection/Redaction
+    parentType: collection
+    name: Redacted
+    description: "Redacted images waiting approval"
+    creator: resource:admin
+    public: False
+  - model: folder
+    parent: resource:collection/Redaction
+    parentType: collection
+    name: Processed
+    description: "Redacted and approved images"
+    creator: resource:admin
+    public: True
+  - model: folder
+    parent: resource:collection/Redaction
+    parentType: collection
+    name: Original
+    description: "Original images before redaction"
+    creator: resource:admin
+    public: False
+  - model: folder
+    parent: resource:collection/Redaction
+    parentType: collection
+    name: Excluded
+    description: "Images that cannot be redacted"
+    creator: resource:admin
+    public: False
+  - model: folder
+    parent: resource:collection/Redaction
+    parentType: collection
+    name: Quarantine
+    description: "Images that need to be checked for redaction"
+    creator: resource:admin
+    public: False
+
+settings:
+  histomicsui.ingest_folder: resourceid:collection/Redaction/Unprocessed
+  histomicsui.quarantine_folder: resourceid:collection/Redaction/Quarantine
+  histomicsui.processed_folder: resourceid:collection/Redaction/Redacted
+  histomicsui.rejected_folder: resourceid:collection/Redaction/Excluded
+  histomicsui.original_folder: resourceid:collection/Redaction/Original
+  histomicsui.finished_folder: resourceid:collection/Redaction/Processed
+  large_image.show_extra_admin: >
+    {"images": ["label", "macro"]}
+  large_image.show_extra: >
+    {"images": ["label", "macro"]}
+  large_image.show_item_extra_admin: >
+    {"metadata": ["tile", "internal"], "images": ["label", "macro", "*"]}
+  large_image.show_item_extra: >
+    {"metadata": ["tile", "internal"], "images": ["label", "macro", "*"]}
