@@ -12,35 +12,56 @@ from tifftools.tifftools import write_tag_data, check_offset, write_ifd, write_s
 
 from tqdm import trange
 
+from models import IFDType
+from utils import get_ifd_type, check_compatible_ifds
+
 
 def write_tiff_conditional(
     original_ifds: List[Dict[str, dict]],
     redacted_ifds: List[Dict[str, dict]],
-    path: str,
+    input_filename: str,
+    output_filename: str,
     svg: pyvips.Image,
     allowExisting: bool = False
 ):
     bigEndian = original_ifds[0].get('bigEndian', False)
 
-    if not allowExisting and not is_filelike_object(path) and os.path.exists(path):
+    if not allowExisting and not is_filelike_object(output_filename) and os.path.exists(output_filename):
         raise TifftoolsException('File already exists')
 
-    with OpenPathOrFobj(path, 'wb') as dest:
+    with OpenPathOrFobj(output_filename, 'wb') as dest:
         bom = '>' if bigEndian else '<'
         header = b'II' if not bigEndian else b'MM'
         header += struct.pack(bom + 'HHHQ', 0x2B, 8, 0, 0)
         ifdPtr = len(header) - 8
         dest.write(header)
 
-        is_redacted = redacted_list(svg, original_ifds[0])
+        for i, original_ifd in enumerate(original_ifds):
+            ifd_type = get_ifd_type(original_ifd)
+            if ifd_type == IFDType.tile:
+                redacted_ifd = find_matching_ifd(original_ifd, redacted_ifds)
+                
+                # check if original and redacted ifd are compatible
 
-        ifd = conditional_ifd(original_ifds[0], redacted_ifds[0], is_redacted)
-        ifdPtr = write_ifd_conditional(dest, bom, ifd, original_ifds[0], redacted_ifds[0], ifdPtr, is_redacted)
-        # ifdPtr = write_ifd(dest, bom, True, redacted_ifds[0], ifdPtr)
-        # ifdPtr = write_ifd(dest, bom, True, ifd, ifdPtr)
+                is_redacted = redacted_list(svg, original_ifd)
+                modified_ifd = conditional_ifd(original_ifd, redacted_ifd, is_redacted)
+                ifdPtr = write_ifd_conditional(dest, bom, modified_ifd, original_ifd, redacted_ifd, ifdPtr, is_redacted)
+            else:
+                ifdPtr = write_ifd(dest, bom, True, original_ifd, ifdPtr)
 
-        for ifd in original_ifds[1:]:
-            ifdPtr = write_ifd(dest, bom, True, ifd, ifdPtr)
+
+def find_matching_ifd(tile_ifd: Dict[str, dict], ifds: List[Dict[str, dict]]):
+    height = tile_ifd['tags'][Tag.ImageHeight.value]['data'][0]
+    width = tile_ifd['tags'][Tag.ImageWidth.value]['data'][0]
+
+    for ifd in ifds:
+        ifd_height = ifd['tags'][Tag.ImageHeight.value]['data'][0]
+        ifd_width = ifd['tags'][Tag.ImageWidth.value]['data'][0]
+
+        if (ifd_height, ifd_width) == (height, width):
+            return ifd
+
+    return None
 
 
 def conditional_ifd(
@@ -87,13 +108,16 @@ def redacted_list(
     tiles_down = (height + tile_height - 1) // tile_height
     num_tiles = tiles_across * tiles_down
 
+    original_height, original_width = svg.height, svg.width
+    resized_svg = svg.resize(width / original_width)
+
     print('calculating redacted tiles')
     for i in trange(num_tiles):
         x = (i % tiles_across) * tile_width
         y = (i // tiles_across) * tile_height
         w = min(tile_width, width - x)
         h = min(tile_height, height - y)
-        tile_max = svg.extract_area(x, y, w, h).extract_band(3).max()
+        tile_max = resized_svg.extract_area(x, y, w, h).extract_band(3).max()
         is_redacted.append(tile_max > 0)
 
     return is_redacted
@@ -136,8 +160,8 @@ def write_ifd_conditional(
                         data = write_tag_data_conditional(
                             dest=dest,
                             original_src=original_src,
-                            original_offsets=redacted_ifd['tags'][Tag.TileOffsets.value]['data'],
-                            original_lengths=redacted_ifd['tags'][Tag.TileByteCounts.value]['data'],
+                            original_offsets=original_ifd['tags'][Tag.TileOffsets.value]['data'],
+                            original_lengths=original_ifd['tags'][Tag.TileByteCounts.value]['data'],
                             original_srclen=original_ifd['size'],
                             redacted_src=redacted_src,
                             redacted_offsets=redacted_ifd['tags'][Tag.TileOffsets.value]['data'],
@@ -238,16 +262,16 @@ def write_tag_data_conditional(
     COPY_CHUNKSIZE = 1024 ** 2
 
     if len(original_offsets) != len(original_lengths):
-        raise TifftoolsException('Original image ffsets and byte counts do not correspond')
+        raise TifftoolsException('Original image offsets and byte counts do not correspond')
     if len(redacted_offsets) != len(redacted_lengths):
-        raise TifftoolsException('Redacted image Offsets and byte counts do not correspond')
+        raise TifftoolsException('Redacted image offsets and byte counts do not correspond')
     
     destOffsets = [0] * len(original_offsets)
-    original_offsetList = sorted([(offset, idx) for idx, offset in enumerate(original_offsets)])
-    redacted_offsetList = sorted([(offset, idx) for idx, offset in enumerate(redacted_offsets)])
+    original_offsetList = [(offset, idx) for idx, offset in enumerate(original_offsets)]
+    redacted_offsetList = [(offset, idx) for idx, offset in enumerate(redacted_offsets)]
 
-    print('writing redacted files')
-    for olidx in trange(len(is_redacted)):
+    print('writing redacted tiles')
+    for olidx in trange(len(original_offsetList)):
         if is_redacted[olidx]:
             offset, idx = redacted_offsetList[olidx]
             length = redacted_lengths[idx]
