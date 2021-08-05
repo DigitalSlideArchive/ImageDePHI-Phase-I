@@ -4,18 +4,23 @@ import time
 import os
 import shutil
 import struct
-from typing import Any, Dict, List, BinaryIO, TypedDict
 from contextlib import contextmanager
+from tempfile import NamedTemporaryFile
+from typing import Any, Dict, List, BinaryIO, TypedDict
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 import pyvips
 import tifftools
+from tifftools.constants import Tag, EstimateJpegQuality
+from tifftools.path_or_fobj import OpenPathOrFobj
+from tifftools.tifftools import write_tag_data, check_offset, write_ifd, write_sub_ifds
 from tqdm import tqdm, trange
 
 import tiff_utils
 from models import Polygon, IFDType
+from utils import get_ifd_type, check_compatible_ifds
 
 
 @contextmanager
@@ -30,11 +35,11 @@ def vips_progress(vips_image: pyvips.Image):
             pbar.update(current - percent)
             percent = current
 
-    vips_image.set_progress(True)
-    vips_image.signal_connect('preeval', progress_print)
-    vips_image.signal_connect('eval', progress_print)
-    vips_image.signal_connect('posteval', progress_print)
     try:
+        vips_image.set_progress(True)
+        vips_image.signal_connect('preeval', progress_print)
+        vips_image.signal_connect('eval', progress_print)
+        vips_image.signal_connect('posteval', progress_print)
         yield None
     finally:
         pbar.close()
@@ -71,49 +76,82 @@ def create_svg(width: int, height: int, polygons: List[Polygon]):
 
 
 def apply_redaction(input_filename: str, output_filename: str, polygons: List[Polygon]):
-    # get tiff information
     original_info = tifftools.read_tiff(input_filename)
-    width = original_info['ifds'][0]['tags'][tifftools.Tag.ImageWidth.value]['data'][0]
-    height = original_info['ifds'][0]['tags'][tifftools.Tag.ImageHeight.value]['data'][0]
-    tile_width = original_info['ifds'][0]['tags'][tifftools.Tag.TileWidth.value]['data'][0]
-    tile_height = original_info['ifds'][0]['tags'][tifftools.Tag.TileHeight.value]['data'][0]
-    photometric = original_info['ifds'][0]['tags'][tifftools.Tag.Photometric.value]['data'][0]
-    jpeg_tables = original_info['ifds'][0]['tags'][tifftools.Tag.JPEGTables.value]['data']
-    jpeg_quality = tifftools.constants.EstimateJpegQuality(jpeg_tables)
+    original_ifds = original_info['ifds']
+    width = original_ifds[0]['tags'][tifftools.Tag.ImageWidth.value]['data'][0]
+    height = original_ifds[0]['tags'][tifftools.Tag.ImageHeight.value]['data'][0]
+    bigEndian = original_ifds[0].get('bigEndian', False)
 
-    # create svg image
+    # construct svg overlay image
     svg_image = create_svg(width, height, polygons)
 
-    # create redacted image
-    original_image = pyvips.Image.tiffload(input_filename)
-    redacted_image = original_image.composite([svg_image], pyvips.BlendMode.OVER)
+    with OpenPathOrFobj(output_filename, 'wb') as dest:
+        bom = '>' if bigEndian else '<'
+        header = b'II' if not bigEndian else b'MM'
+        header += struct.pack(bom + 'HHHQ', 0x2B, 8, 0, 0)
+        ifdPtr = len(header) - 8
+        dest.write(header)
 
-    ### TODO: replace with real tempfile and using block
-    tempfile = output_filename.replace('svs', 'tif')
-    print(f'outputing to file: {tempfile}')
-    with vips_progress(redacted_image):
-        redacted_image.tiffsave(
-            tempfile,
-            tile=True,
-            tile_width=tile_width,
-            tile_height=tile_height,
-            pyramid=True,
-            bigtiff=True,
-            rgbjpeg=(photometric == 2),
-            compression='jpeg',
-            Q=jpeg_quality,
-        )
+        for i, original_ifd in enumerate(original_ifds):
+            ifd_type = get_ifd_type(original_ifd)
+            if ifd_type == IFDType.tile:
+                original_image = pyvips.Image.tiffload(input_filename, page=i)
+                is_redacted, resized_svg = tiff_utils.redacted_list(svg_image, original_ifd)
+                redacted_image = original_image.composite([resized_svg], pyvips.BlendMode.OVER)
 
-    redacted_info = tifftools.read_tiff(tempfile)
-    # write to combined tiff output
-    tiff_utils.write_tiff_conditional(
-        original_ifds=original_info['ifds'],
-        redacted_ifds=redacted_info['ifds'],
-        input_filename=input_filename,
-        output_filename=output_filename,
-        svg=svg_image,
-        allowExisting=True,
-    )
+                original_tile_width = original_ifd['tags'][Tag.TileWidth.value]['data'][0]
+                original_tile_height = original_ifd['tags'][Tag.TileHeight.value]['data'][0]
+                original_compression = original_ifd['tags'][Tag.Compression.value]['data'][0]
+                original_photometric = original_ifd['tags'][Tag.Photometric.value]['data'][0]
+                original_jpeg_tables = original_ifd['tags'][Tag.JPEGTables.value]['data']
+                original_jpeg_quality = EstimateJpegQuality(original_jpeg_tables)
+
+                with NamedTemporaryFile(suffix='{i}_out.tiff') as tmp:
+                    with vips_progress(redacted_image):
+                        redacted_image.tiffsave(
+                            tmp.name,
+                            tile=True,
+                            tile_width=original_tile_width,
+                            tile_height=original_tile_height,
+                            pyramid=False,
+                            bigtiff=True,
+                            rgbjpeg=(original_photometric == 2),
+                            compression='jpeg',
+                            Q=original_jpeg_quality,
+                        )
+                    
+                    redacted_info = tifftools.read_tiff(tmp.name)
+                    redacted_ifd = redacted_info['ifds'][0]
+                    redacted_tile_width = redacted_ifd['tags'][Tag.TileWidth.value]['data'][0]
+                    redacted_tile_height = redacted_ifd['tags'][Tag.TileHeight.value]['data'][0]
+                    redacted_compression = redacted_ifd['tags'][Tag.Compression.value]['data'][0]
+                    redacted_photometric = redacted_ifd['tags'][Tag.Photometric.value]['data'][0]
+                    redacted_jpeg_tables = redacted_ifd['tags'][Tag.JPEGTables.value]['data']
+                    redacted_jpeg_quality = EstimateJpegQuality(redacted_jpeg_tables)
+
+                    if original_tile_width != redacted_tile_width:
+                        raise ValueError('Original tile width does not match redacted tile width')
+                    if original_tile_height != redacted_tile_height:
+                        raise ValueError('Original tile height does not match redacted tile height')
+                    if original_compression != redacted_compression:
+                        raise ValueError('Original compression does not match redacted compression')
+                    if original_photometric != redacted_photometric:
+                        raise ValueError('Original photometric does not match redacted photometric')
+                    if original_jpeg_quality != redacted_jpeg_quality:
+                        raise ValueError('Original JPEG quality do not match redacted JPEG quality')
+                    
+                    modified_ifd = tiff_utils.conditional_ifd(original_ifd, redacted_ifd, is_redacted)
+                    ifdPtr = tiff_utils.write_ifd_conditional(
+                        dest=dest,
+                        bom=bom,
+                        ifd=modified_ifd,
+                        original_ifd=original_ifd,
+                        redacted_ifd=redacted_ifd,
+                        ifdPtr=ifdPtr,
+                        is_redacted=is_redacted,
+                    )
+            else:
+                ifdPtr = write_ifd(dest, bom, True, original_ifd, ifdPtr)
 
 
 def get_args():
@@ -130,7 +168,6 @@ def main(args):
     annotation_filename = args.annotation
 
     start = time.time()
-
     polygons = get_polygons(annotation_filename)
     apply_redaction(input_filename, output_filename, polygons)
     end = time.time()

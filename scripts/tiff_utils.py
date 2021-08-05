@@ -2,7 +2,7 @@ import copy
 import os
 import struct
 
-from typing import Dict, List, BinaryIO
+from typing import Dict, List, BinaryIO, Tuple
 
 import pyvips
 from tifftools.constants import TiffConstant, TiffConstantSet, Datatype, Tag, get_or_create_tag
@@ -97,7 +97,8 @@ def conditional_ifd(
 def redacted_list(
     svg: pyvips.Image,
     ifd: Dict[str, dict],
-) -> List[bool]:
+    verbose: bool = True
+) -> Tuple[List[bool], pyvips.Image]:
     width = ifd['tags'][Tag.ImageWidth.value]['data'][0]
     height = ifd['tags'][Tag.ImageHeight.value]['data'][0]
     tile_width = ifd['tags'][Tag.TileWidth.value]['data'][0]
@@ -111,8 +112,13 @@ def redacted_list(
     original_height, original_width = svg.height, svg.width
     resized_svg = svg.resize(width / original_width)
 
-    print('calculating redacted tiles')
-    for i in trange(num_tiles):
+    if verbose:
+        print('calculating redacted tiles')
+        loop = trange
+    else:
+        loop = range
+
+    for i in loop(num_tiles):
         x = (i % tiles_across) * tile_width
         y = (i // tiles_across) * tile_height
         w = min(tile_width, width - x)
@@ -120,7 +126,7 @@ def redacted_list(
         tile_max = resized_svg.extract_area(x, y, w, h).extract_band(3).max()
         is_redacted.append(tile_max > 0)
 
-    return is_redacted
+    return is_redacted, resized_svg
 
 
 def write_ifd_conditional(
@@ -270,8 +276,7 @@ def write_tag_data_conditional(
     original_offsetList = [(offset, idx) for idx, offset in enumerate(original_offsets)]
     redacted_offsetList = [(offset, idx) for idx, offset in enumerate(redacted_offsets)]
 
-    print('writing redacted tiles')
-    for olidx in trange(len(original_offsetList)):
+    for olidx in range(len(original_offsetList)):
         if is_redacted[olidx]:
             offset, idx = redacted_offsetList[olidx]
             length = redacted_lengths[idx]
