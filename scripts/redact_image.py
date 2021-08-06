@@ -481,7 +481,7 @@ def redact_tiff(input_filename: str, output_filename: str, polygons: List[Polygo
                 original_image_height = original_ifd['tags'][Tag.ImageHeight.value]['data'][0]
                 original_compression = original_ifd['tags'][Tag.Compression.value]['data'][0]
                 original_photometric = original_ifd['tags'][Tag.Photometric.value]['data'][0]
-                if Tag.JPEGTables.value in original_ifds['tags']:
+                if Tag.JPEGTables.value in original_ifd['tags']:
                     # get JPEG quality from JPEG tables
                     original_jpeg_tables = original_ifd['tags'][Tag.JPEGTables.value]['data']
                     original_jpeg_quality = EstimateJpegQuality(original_jpeg_tables)
