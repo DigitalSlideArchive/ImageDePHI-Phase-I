@@ -4,14 +4,22 @@ import dataclasses
 import enum
 import json
 import os
-import re
 import struct
 import tempfile
 import time
 from typing import BinaryIO, Dict, List, Tuple
 
 import pyvips
-from tifftools.constants import Datatype, Tag, EstimateJpegQuality, TiffConstant, TiffConstantSet, get_or_create_tag
+from tifftools.constants import (
+    Compression,
+    Datatype,
+    EstimateJpegQuality,
+    Photometric,
+    Tag,
+    TiffConstant,
+    TiffConstantSet,
+    get_or_create_tag,
+)
 from tifftools.path_or_fobj import OpenPathOrFobj
 from tifftools.tifftools import check_offset, read_tiff, write_ifd, write_tag_data
 
@@ -57,7 +65,7 @@ def get_ifd_type(ifd: Dict[str, dict]) -> IFDType:
     """
     if Tag.TileOffsets.value in ifd['tags']:
         return IFDType.tile
-    
+
     new_subfile_type = ifd['tags'].get(Tag.NewSubfileType.value)
     if new_subfile_type:
         key = new_subfile_type['data'][0]
@@ -170,7 +178,7 @@ def write_ifd_conditionally(
             tag = get_or_create_tag(
                 tag,
                 tagSet,
-                **({'datatype': Datatype[taginfo['datatype']]} if taginfo.get('datatype') else {})
+                **({'datatype': Datatype[taginfo['datatype']]} if taginfo.get('datatype') else {}),
             )
             if tag.isIFD() or taginfo.get('datatype') in (Datatype.IFD, Datatype.IFD8):
                 data = [0] * len(taginfo['ifds'])
@@ -183,7 +191,11 @@ def write_ifd_conditionally(
             if tag.isOffsetData():
                 if tag.value == Tag.TileOffsets.value:
                     # special write for tiles only
-                    with OpenPathOrFobj(original_ifd['path_or_fobj'], 'rb') as original_src, OpenPathOrFobj(redacted_ifd['path_or_fobj'], 'rb') as redacted_src:
+                    with OpenPathOrFobj(
+                        original_ifd['path_or_fobj'], 'rb'
+                    ) as original_src, OpenPathOrFobj(
+                        redacted_ifd['path_or_fobj'], 'rb'
+                    ) as redacted_src:
                         data = write_tag_data_conditionally(
                             dest=dest,
                             original_src=original_src,
@@ -194,7 +206,7 @@ def write_ifd_conditionally(
                             redacted_offsets=redacted_ifd['tags'][Tag.TileOffsets.value]['data'],
                             redacted_lengths=redacted_ifd['tags'][Tag.TileByteCounts.value]['data'],
                             redacted_srclen=redacted_ifd['size'],
-                            is_redacted=is_redacted
+                            is_redacted=is_redacted,
                         )
                 elif isinstance(tag.bytecounts, str):
                     data = write_tag_data(
@@ -202,7 +214,7 @@ def write_ifd_conditionally(
                         src=src,
                         offsets=data,
                         lengths=ifd['tags'][int(tagSet[tag.bytecounts])]['data'],
-                        srclen=ifd['size']
+                        srclen=ifd['size'],
                     )
                 else:
                     data = write_tag_data(dest, src, data, [tag.bytecounts] * count, ifd['size'])
@@ -294,7 +306,7 @@ def write_sub_ifds_conditionally(
                     redacted_ifd=redacted_ifd,
                     is_redacted=is_redacted,
                     ifdPtr=nextSubifdPtr,
-                    tag=getattr(tag, 'tagset', None)
+                    tagSet=getattr(tag, 'tagset', None),
                 )
             subifdPtr += tagdatalen
 
@@ -328,9 +340,9 @@ def write_tag_data_conditionally(
         raise ValueError('Original image data does not correspond with redacted list')
     if not (len(redacted_offsets) == len(redacted_lengths) == len(is_redacted)):
         raise ValueError('Redacted image data does not correspond with redacted list')
-    
+
     destOffsets = [0] * len(original_offsets)
-    
+
     for idx, redacted in enumerate(is_redacted):
         if redacted:
             offset = redacted_offsets[idx]
@@ -392,28 +404,33 @@ def redact_tiff(input_filename: str, output_filename: str, polygons: List[Polygo
             ifd_type = get_ifd_type(original_ifd)
             if verbose:
                 print(f'=== ifd {i}: {ifd_type} ===')
+
             if ifd_type == IFDType.tile:
                 # extract original image ifd properties
                 original_image_width = original_ifd['tags'][Tag.ImageWidth.value]['data'][0]
                 original_image_height = original_ifd['tags'][Tag.ImageHeight.value]['data'][0]
                 original_tile_width = original_ifd['tags'][Tag.TileWidth.value]['data'][0]
                 original_tile_height = original_ifd['tags'][Tag.TileHeight.value]['data'][0]
-                original_compression = original_ifd['tags'][Tag.Compression.value]['data'][0]
                 original_photometric = original_ifd['tags'][Tag.Photometric.value]['data'][0]
-                if Tag.JPEGTables.value in original_ifd['tags']:
-                    # get JPEG quality from JPEG tables
+                original_compression = original_ifd['tags'][Tag.Compression.value]['data'][0]
+
+                if original_photometric == Photometric.RGB.value:
+                    original_rgbjpeg = True
+                elif original_photometric == Photometric.YCbCr.value:
+                    original_rgbjpeg = False
+                else:
+                    raise ValueError(
+                        f'Unsupported photometric: {Photometric[original_photometric]}'
+                    )
+
+                if original_compression == Compression.JPEG.value:
+                    original_compression_type = 'jpeg'
                     original_jpeg_tables = original_ifd['tags'][Tag.JPEGTables.value]['data']
                     original_jpeg_quality = EstimateJpegQuality(original_jpeg_tables)
-                elif Tag.ImageDescription.value in original_ifd['tags']:
-                    # get JPEG quality from description
-                    original_image_description = original_ifd['tags'][Tag.ImageDescription.value]['data']
-                    match = re.search(r'Q=[0-9]+', original_image_description)
-                    if match:
-                        original_jpeg_quality = int(match.group(0)[2:])
-                    else:
-                        raise ValueError('Cannot get JPEG Compression')
                 else:
-                    raise ValueError('Cannot get JPEG Compression')
+                    raise ValueError(
+                        f'Unsupported compression: {Compression[original_compression]}'
+                    )
 
                 # create redacted image
                 original_image = pyvips.Image.tiffload(input_filename, page=i)
@@ -423,7 +440,7 @@ def redact_tiff(input_filename: str, output_filename: str, polygons: List[Polygo
                     resized_svg = svg_image
                 redacted_image = original_image.composite([resized_svg], pyvips.BlendMode.OVER)
 
-                with tempfile.NamedTemporaryFile(suffix='{i}_out.tiff') as tmp:
+                with tempfile.NamedTemporaryFile(suffix=f'{i}_out.tiff') as tmp:
                     # write redacted image to temporary file
                     if verbose:
                         print('creating redacted image')
@@ -434,8 +451,8 @@ def redact_tiff(input_filename: str, output_filename: str, polygons: List[Polygo
                         tile_height=original_tile_height,
                         pyramid=False,
                         bigtiff=True,
-                        rgbjpeg=(original_photometric == 2),
-                        compression='jpeg',
+                        rgbjpeg=original_rgbjpeg,
+                        compression=original_compression_type,
                         Q=original_jpeg_quality,
                     )
 
@@ -444,28 +461,34 @@ def redact_tiff(input_filename: str, output_filename: str, polygons: List[Polygo
                     redacted_ifd = redacted_info['ifds'][0]
                     redacted_tile_width = redacted_ifd['tags'][Tag.TileWidth.value]['data'][0]
                     redacted_tile_height = redacted_ifd['tags'][Tag.TileHeight.value]['data'][0]
-                    redacted_compression = redacted_ifd['tags'][Tag.Compression.value]['data'][0]
                     redacted_photometric = redacted_ifd['tags'][Tag.Photometric.value]['data'][0]
-                    redacted_jpeg_tables = redacted_ifd['tags'][Tag.JPEGTables.value]['data']
-                    redacted_jpeg_quality = EstimateJpegQuality(redacted_jpeg_tables)
+                    redacted_compression = redacted_ifd['tags'][Tag.Compression.value]['data'][0]
+
+                    if redacted_compression == Compression.JPEG.value:
+                        redacted_jpeg_tables = redacted_ifd['tags'][Tag.JPEGTables.value]['data']
+                        redacted_jpeg_quality = EstimateJpegQuality(redacted_jpeg_tables)
+                    else:
+                        redacted_jpeg_quality = original_jpeg_quality
 
                     # check if can redacted image is compatible
                     if original_tile_width != redacted_tile_width:
                         raise ValueError('Original tile width does not match redacted tile width')
                     if original_tile_height != redacted_tile_height:
                         raise ValueError('Original tile height does not match redacted tile height')
-                    if original_compression != redacted_compression:
-                        raise ValueError('Original compression does not match redacted compression')
                     if original_photometric != redacted_photometric:
                         raise ValueError('Original photometric does not match redacted photometric')
+                    if original_compression != redacted_compression:
+                        raise ValueError('Original compression does not match redacted compression')
                     if original_jpeg_quality != redacted_jpeg_quality:
                         raise ValueError('Original JPEG quality do not match redacted JPEG quality')
-                    
-                    # construct combined ifd
+
                     if verbose:
-                        print('creating combined image')
+                        print('calculating redacted tiles')
                     is_redacted = redacted_list(svg_image, original_ifd)
                     modified_ifd = conditional_ifd(original_ifd, redacted_ifd, is_redacted)
+                    # construct combined ifd
+                    if verbose:
+                        print('writing to output image')
                     ifdPtr = write_ifd_conditionally(
                         dest=dest,
                         bom=bom,
@@ -476,25 +499,9 @@ def redact_tiff(input_filename: str, output_filename: str, polygons: List[Polygo
                         ifdPtr=ifdPtr,
                     )
             elif ifd_type == IFDType.thumbnail:
-                # extract tiff properties
+                # extract original image ifd properties
                 original_image_width = original_ifd['tags'][Tag.ImageWidth.value]['data'][0]
                 original_image_height = original_ifd['tags'][Tag.ImageHeight.value]['data'][0]
-                original_compression = original_ifd['tags'][Tag.Compression.value]['data'][0]
-                original_photometric = original_ifd['tags'][Tag.Photometric.value]['data'][0]
-                if Tag.JPEGTables.value in original_ifd['tags']:
-                    # get JPEG quality from JPEG tables
-                    original_jpeg_tables = original_ifd['tags'][Tag.JPEGTables.value]['data']
-                    original_jpeg_quality = EstimateJpegQuality(original_jpeg_tables)
-                elif Tag.ImageDescription.value in original_ifd['tags']:
-                    # get JPEG quality from description
-                    original_image_description = original_ifd['tags'][Tag.ImageDescription.value]['data']
-                    match = re.search(r'Q=[0-9]+', original_image_description)
-                    if match:
-                        original_jpeg_quality = int(match.group(0)[2:])
-                    else:
-                        raise ValueError('Cannot get JPEG Compression')
-                else:
-                    raise ValueError('Cannot get JPEG Compression')
 
                 # create redacted image
                 original_image = pyvips.Image.tiffload(input_filename, page=i)
@@ -504,7 +511,7 @@ def redact_tiff(input_filename: str, output_filename: str, polygons: List[Polygo
                     resized_svg = svg_image
                 redacted_image = original_image.composite([resized_svg], pyvips.BlendMode.OVER)
 
-                with tempfile.NamedTemporaryFile(suffix='{i}_out.tiff') as tmp:
+                with tempfile.NamedTemporaryFile(suffix=f'{i}_out.tiff') as tmp:
                     # write redacted image to temporary file
                     if verbose:
                         print('creating redacted image')
@@ -513,9 +520,6 @@ def redact_tiff(input_filename: str, output_filename: str, polygons: List[Polygo
                         tile=False,
                         pyramid=False,
                         bigtiff=True,
-                        rgbjpeg=(original_photometric == 2),
-                        compression='jpeg',
-                        Q=original_jpeg_quality,
                     )
 
                     # extract redacted image ifd properties
@@ -529,11 +533,11 @@ def redact_tiff(input_filename: str, output_filename: str, polygons: List[Polygo
 
                     # construct combined ifd
                     if verbose:
-                        print('creating combined image')
+                        print('writing to output image')
                     ifdPtr = write_ifd(dest, bom, True, redacted_ifd, ifdPtr)
             else:
                 if verbose:
-                    print('creating combined image')
+                    print('writing to output image')
                 ifdPtr = write_ifd(dest, bom, True, original_ifd, ifdPtr)
 
 
@@ -556,8 +560,8 @@ def main(args):
     polygons = get_polygons(annotation_filename)
     redact_tiff(input_filename, output_filename, polygons, verbose)
     end = time.time()
-    elapsed = time.strftime('%M:%S', time.gmtime(end - start))
     if verbose:
+        elapsed = time.strftime('%M:%S', time.gmtime(end - start))
         print(f'total time: {elapsed}')
 
 
