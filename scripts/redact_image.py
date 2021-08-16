@@ -4,10 +4,11 @@ import dataclasses
 import enum
 import json
 import os
+import re
 import struct
+import sys
 import tempfile
-import time
-from typing import BinaryIO, Dict, List, Tuple
+from typing import Any, BinaryIO, Dict, List
 
 import pyvips
 from tifftools.constants import (
@@ -26,7 +27,7 @@ from tifftools.tifftools import check_offset, read_tiff, write_ifd, write_tag_da
 
 @dataclasses.dataclass
 class Polygon:
-    points: List[Tuple[float]]
+    points: List[list]
     fill_color: str
     line_color: str
     line_width: float
@@ -41,9 +42,7 @@ class IFDType(str, enum.Enum):
 
 
 def get_polygons(annotation_filename: str) -> List[Polygon]:
-    """
-    Extract polygon list from json annotation file
-    """
+    """Extract polygon list from json annotation file."""
     with open(annotation_filename, 'r') as f:
         data = json.load(f)
     elements = data['annotation']['elements']
@@ -51,18 +50,17 @@ def get_polygons(annotation_filename: str) -> List[Polygon]:
     for e in elements:
         if e['type'] == 'polyline':
             points = e.get('points', [])
-            fill_color = e.get('fillColor', 'black')
-            line_color = e.get('lineColor', 'black')
-            line_width = e.get('lineWidth', 1)
-            polygon = Polygon(points, fill_color, line_color, line_width)
-            polygons.append(polygon)
+            if points:
+                fill_color = e.get('fillColor', 'black')
+                line_color = e.get('lineColor', 'black')
+                line_width = e.get('lineWidth', 1)
+                polygon = Polygon(points, fill_color, line_color, line_width)
+                polygons.append(polygon)
     return polygons
 
 
-def get_ifd_type(ifd: Dict[str, dict]) -> IFDType:
-    """
-    Identify the type of IFD
-    """
+def get_ifd_type(ifd: Dict[str, Any]) -> IFDType:
+    """Identify the type of IFD."""
     if Tag.TileOffsets.value in ifd['tags']:
         return IFDType.tile
 
@@ -81,14 +79,34 @@ def get_ifd_type(ifd: Dict[str, dict]) -> IFDType:
         return IFDType.other
 
 
+def create_svg(width: int, height: int, polygons: List[Polygon]) -> pyvips.Image:
+    """Create an SVG image using polygons."""
+    svg_str = f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">'
+
+    for polygon in polygons:
+        if isinstance(polygon.points[0][0], list):
+            items = polygon.points
+        else:
+            items = [polygon.points]
+
+        svg_str += f'<path fill-rule="evenodd" fill="{polygon.fill_color}" d="'
+        for item in items:
+            points = ' '.join([f'{pt[0]},{pt[1]}' for pt in item])
+            svg_str += f'M {points} z '
+        svg_str += '" />'
+
+    svg_str += '</svg>'
+
+    svg_image = pyvips.Image.svgload_buffer(svg_str.encode())
+    return svg_image
+
+
 def conditional_ifd(
-    original_ifd: Dict[str, dict],
-    redacted_ifd: Dict[str, dict],
+    original_ifd: Dict[str, Any],
+    redacted_ifd: Dict[str, Any],
     is_redacted: List[bool],
-) -> Dict[str, dict]:
-    """
-    Construct an IFD conditionally from two IFD
-    """
+) -> Dict[str, Any]:
+    """Construct an IFD conditionally from two IFD."""
     ifd = copy.deepcopy(original_ifd)
     tile_offsets: List[int] = []
     tile_bytecounts: List[int] = []
@@ -122,10 +140,8 @@ def conditional_ifd(
     return ifd
 
 
-def redacted_list(svg: pyvips.Image, ifd: Dict[str, dict]) -> List[bool]:
-    """
-    Extract list of which tiles have been modified in an SVG
-    """
+def redacted_list(svg: pyvips.Image, ifd: Dict[str, Any]) -> List[bool]:
+    """Extract list of which tiles have been modified in an SVG."""
     # extract tile data
     width = ifd['tags'][Tag.ImageWidth.value]['data'][0]
     height = ifd['tags'][Tag.ImageHeight.value]['data'][0]
@@ -157,16 +173,14 @@ def redacted_list(svg: pyvips.Image, ifd: Dict[str, dict]) -> List[bool]:
 def write_ifd_conditionally(
     dest: BinaryIO,
     bom: str,
-    ifd: Dict[str, dict],
-    original_ifd: Dict[str, dict],
-    redacted_ifd: Dict[str, dict],
+    ifd: Dict[str, Any],
+    original_ifd: Dict[str, Any],
+    redacted_ifd: Dict[str, Any],
     is_redacted: List[bool],
     ifdPtr: int,
     tagSet: TiffConstantSet = Tag,
 ) -> int:
-    """
-    Copied from tifftools.tifftools.write_ifd but with conditional modification
-    """
+    """Copied from tifftools.tifftools.write_ifd but with conditional modification."""
     ptrpack = 'Q'
     tagdatalen = 8
     dest.seek(0, os.SEEK_END)
@@ -278,17 +292,15 @@ def write_ifd_conditionally(
 def write_sub_ifds_conditionally(
     dest: BinaryIO,
     bom: str,
-    ifd: Dict[str, dict],
-    original_ifd: Dict[str, dict],
-    redacted_ifd: Dict[str, dict],
+    ifd: Dict[str, Any],
+    original_ifd: Dict[str, Any],
+    redacted_ifd: Dict[str, Any],
     is_redacted: List[bool],
     parentPos: int,
     subifdPtrs: Dict[TiffConstant, int],
     tagSet: TiffConstantSet = Tag,
 ):
-    """
-    Copied from tifftools.tifftools.write_sub_ifds but with conditional modification
-    """
+    """Copied from tifftools.tifftools.write_sub_ifds but with conditional modification."""
     tagdatalen = 8
     for tag, subifdPtr in subifdPtrs.items():
         if subifdPtr < 0:
@@ -323,9 +335,7 @@ def write_tag_data_conditionally(
     redacted_srclen: int,
     is_redacted: List[bool],
 ) -> List[int]:
-    """
-    Conditionally write tag data from two IFD based on boolean list
-    """
+    """Conditionally write tag data from two IFD based on boolean list."""
     COPY_CHUNKSIZE = 1024 ** 2
 
     if len(original_offsets) != len(original_lengths):
@@ -367,23 +377,8 @@ def write_tag_data_conditionally(
     return destOffsets
 
 
-def create_svg(width: int, height: int, polygons: List[Polygon]) -> pyvips.Image:
-    """
-    Create an SVG image using polygons
-    """
-    svg_str = f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">'
-    for polygon in polygons:
-        points = ' '.join([f'{pt[0]},{pt[1]}' for pt in polygon.points])
-        svg_str += f'<polygon points="{points}" stroke="none" fill="{polygon.fill_color}" />'
-    svg_str += '</svg>'
-    svg_image = pyvips.Image.svgload_buffer(svg_str.encode())
-    return svg_image
-
-
 def redact_tiff(input_filename: str, output_filename: str, polygons: List[Polygon], verbose: bool):
-    """
-    Remove polygons from input TIFF and output a modified redacted TIFF
-    """
+    """Remove polygons from input TIFF and output a modified redacted TIFF."""
     original_info = read_tiff(input_filename)
     original_ifds = original_info['ifds']
     width = original_ifds[0]['tags'][Tag.ImageWidth.value]['data'][0]
@@ -424,13 +419,20 @@ def redact_tiff(input_filename: str, output_filename: str, polygons: List[Polygo
                     )
 
                 if original_compression == Compression.JPEG.value:
-                    original_compression_type = 'jpeg'
                     original_jpeg_tables = original_ifd['tags'][Tag.JPEGTables.value]['data']
                     original_jpeg_quality = EstimateJpegQuality(original_jpeg_tables)
                 else:
-                    raise ValueError(
-                        f'Unsupported compression: {Compression[original_compression]}'
-                    )
+                    if Tag.ImageDescription.value in original_ifds['tags']:
+                        original_image_description = original_ifds['tags'][Tag.ImageDesciption][
+                            'data'
+                        ]
+                    else:
+                        original_image_description = ''
+                    match = re.search(r'Q=\d+', original_image_description)
+                    if match:
+                        original_jpeg_quality = int(match[0][2:])
+                    else:
+                        original_jpeg_quality = 70
 
                 # create redacted image
                 original_image = pyvips.Image.tiffload(input_filename, page=i)
@@ -452,7 +454,7 @@ def redact_tiff(input_filename: str, output_filename: str, polygons: List[Polygo
                         pyramid=False,
                         bigtiff=True,
                         rgbjpeg=original_rgbjpeg,
-                        compression=original_compression_type,
+                        compression='jpeg',
                         Q=original_jpeg_quality,
                     )
 
@@ -463,41 +465,38 @@ def redact_tiff(input_filename: str, output_filename: str, polygons: List[Polygo
                     redacted_tile_height = redacted_ifd['tags'][Tag.TileHeight.value]['data'][0]
                     redacted_photometric = redacted_ifd['tags'][Tag.Photometric.value]['data'][0]
                     redacted_compression = redacted_ifd['tags'][Tag.Compression.value]['data'][0]
-
-                    if redacted_compression == Compression.JPEG.value:
-                        redacted_jpeg_tables = redacted_ifd['tags'][Tag.JPEGTables.value]['data']
-                        redacted_jpeg_quality = EstimateJpegQuality(redacted_jpeg_tables)
-                    else:
-                        redacted_jpeg_quality = original_jpeg_quality
+                    redacted_jpeg_tables = redacted_ifd['tags'][Tag.JPEGTables.value]['data']
+                    redacted_jpeg_quality = EstimateJpegQuality(redacted_jpeg_tables)
 
                     # check if can redacted image is compatible
-                    if original_tile_width != redacted_tile_width:
-                        raise ValueError('Original tile width does not match redacted tile width')
-                    if original_tile_height != redacted_tile_height:
-                        raise ValueError('Original tile height does not match redacted tile height')
-                    if original_photometric != redacted_photometric:
-                        raise ValueError('Original photometric does not match redacted photometric')
-                    if original_compression != redacted_compression:
-                        raise ValueError('Original compression does not match redacted compression')
-                    if original_jpeg_quality != redacted_jpeg_quality:
-                        raise ValueError('Original JPEG quality do not match redacted JPEG quality')
-
-                    if verbose:
-                        print('calculating redacted tiles')
-                    is_redacted = redacted_list(svg_image, original_ifd)
-                    modified_ifd = conditional_ifd(original_ifd, redacted_ifd, is_redacted)
-                    # construct combined ifd
-                    if verbose:
-                        print('writing to output image')
-                    ifdPtr = write_ifd_conditionally(
-                        dest=dest,
-                        bom=bom,
-                        ifd=modified_ifd,
-                        original_ifd=original_ifd,
-                        redacted_ifd=redacted_ifd,
-                        is_redacted=is_redacted,
-                        ifdPtr=ifdPtr,
-                    )
+                    if (
+                        original_tile_width != redacted_tile_width
+                        or original_tile_height != redacted_tile_height
+                        or original_photometric != redacted_photometric
+                        or original_compression != redacted_compression
+                        or original_jpeg_quality != redacted_jpeg_quality
+                    ):
+                        if verbose:
+                            print('cannot use conditional tiles')
+                            print('writing to output image')
+                        ifdPtr = write_ifd(dest, bom, True, redacted_ifd, ifdPtr)
+                    else:
+                        if verbose:
+                            print('using conditional tiles')
+                        is_redacted = redacted_list(svg_image, original_ifd)
+                        modified_ifd = conditional_ifd(original_ifd, redacted_ifd, is_redacted)
+                        # construct combined ifd
+                        if verbose:
+                            print('writing to output image')
+                        ifdPtr = write_ifd_conditionally(
+                            dest=dest,
+                            bom=bom,
+                            ifd=modified_ifd,
+                            original_ifd=original_ifd,
+                            redacted_ifd=redacted_ifd,
+                            is_redacted=is_redacted,
+                            ifdPtr=ifdPtr,
+                        )
             elif ifd_type == IFDType.thumbnail:
                 # extract original image ifd properties
                 original_image_width = original_ifd['tags'][Tag.ImageWidth.value]['data'][0]
@@ -542,27 +541,25 @@ def redact_tiff(input_filename: str, output_filename: str, polygons: List[Polygo
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description='Redact tiff file')
-    parser.add_argument('--input', '--src', type=str, required=True, help='Input image filename')
-    parser.add_argument('--output', '--dest', type=str, required=True, help='Output image filename')
+    parser = argparse.ArgumentParser(description='Redact a tiff file using annotation polygons.')
+    parser.add_argument('source', type=str, help='Source image filename')
+    parser.add_argument('--out', '-o', type=str, required=True, help='Output image filename')
     parser.add_argument('--annotation', '-a', type=str, required=True, help='Annotation filename')
     parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
     return parser.parse_args()
 
 
 def main(args):
-    input_filename = args.input
-    output_filename = args.output
+    input_filename = args.source
+    output_filename = args.out
     annotation_filename = args.annotation
     verbose = args.verbose
 
-    start = time.time()
+    if input_filename == output_filename:
+        sys.exit('error: output filename cannot be the same as the source filename')
+
     polygons = get_polygons(annotation_filename)
     redact_tiff(input_filename, output_filename, polygons, verbose)
-    end = time.time()
-    if verbose:
-        elapsed = time.strftime('%M:%S', time.gmtime(end - start))
-        print(f'total time: {elapsed}')
 
 
 if __name__ == '__main__':
