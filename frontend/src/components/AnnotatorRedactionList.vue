@@ -46,9 +46,10 @@
 </template>
 
 <script lang="ts">
-  import AnnotatorRedactionListItem from './AnnotatorRedactionListItem.vue';
-  import type { GeoJSON } from '../types';
   import { defineComponent, PropType } from 'vue';
+
+  import type { GeoJSON } from '../types';
+  import AnnotatorRedactionListItem from './AnnotatorRedactionListItem.vue';
 
   export default defineComponent({
     name: 'AnnotatorRedactionList',

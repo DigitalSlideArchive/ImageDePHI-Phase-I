@@ -1,4 +1,4 @@
-FROM node:14 AS builder
+FROM node:14-slim as builder
 WORKDIR /code
 COPY package.json \
     package-lock.json \
@@ -14,8 +14,8 @@ COPY public /code/public/
 RUN npm run build
 
 FROM nginx
-COPY --from=builder /code/dist/ /usr/share/nginx/html
+COPY --from=builder /code/public/ /usr/share/nginx/html/
 COPY nginx.conf /etc/nginx/templates/nginx.conf.template
-ENV NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx
-ENV BACKEND_HOST=http://example.com
+ENV BACKEND_HOST=http://example.com \
+    NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx
 EXPOSE 8080

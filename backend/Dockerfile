@@ -1,30 +1,30 @@
-FROM python:3 as builder
-ENV PYTHONUNBUFFERED=1
+FROM python:3.8-slim as girder
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
+    PYTHONHASHSEED=random \
+    PIP_NO_CACHE_DIR=on \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
+    PIP_DEFAULT_TIMEOUT=100 \
+    MONGO_DATABASE=mongodb://example.com:27017/girder
 WORKDIR /code
-COPY pyproject.toml \
-    setup.py \
-    setup.cfg \
-    /code/
-COPY girder_imagedephi /code/girder_imagedephi/
-RUN pip wheel --no-deps -w /code/wheels/ .
-
-FROM python:3 as environment
-ENV PYTHONUNBUFFERED=1
-COPY requirements.txt /tmp/
-RUN pip install -r /tmp/requirements.txt && rm /tmp/requirements.txt
-COPY --from=builder /code/wheels/ /tmp/wheels/
-RUN pip install /tmp/wheels/* && rm -rf /tmp/wheels
-
-FROM environment AS tests
-ENV PYTHONUNBUFFERED=1
-WORKDIR /code
-COPY --from=builder /code/ /code/
-RUN pip install ".[test]"
-COPY tests /code/tests/
-CMD pytest tests
-
-FROM environment
-ENV PYTHONUNBUFFERED=1
-ENV MONGO_DATABASE=mongodb://example.com:27017/girder
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y nodejs npm \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir poetry
+COPY pyproject.toml poetry.lock /code/
+RUN poetry install --no-root --no-dev
+RUN poetry run girder build
+COPY girder_imagedephi/ /code/girder_imagedephi/
+RUN poetry install --no-dev
 EXPOSE 8080
-CMD girder serve --host 0.0.0.0 --database $MONGO_DATABASE
+CMD poetry run girder serve --host 0.0.0.0 --database $MONGO_DATABASE
+
+FROM girder AS worker
+RUN poetry install --no-dev -E worker -E bin
+CMD poetry run girder serve --host 0.0.0.0 --database $MONGO_DATABASE
+
+FROM worker AS test
+RUN poetry install
+COPY .flake8 pyproject.toml /code/
+COPY tests/ /code/tests/
+CMD poetry run pytest --mongo-uri $MONGO_DATABASE

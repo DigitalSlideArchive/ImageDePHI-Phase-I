@@ -8,6 +8,7 @@
 
 <script lang="ts">
   import { defineComponent } from 'vue';
+
   import { getAssociatedLabels } from '../api/item';
 
   export default defineComponent({
@@ -16,19 +17,20 @@
       itemId: { type: String, required: true },
       size: { type: Number, required: false, default: 75 },
     },
-    computed: {
-      cssVars() {
-        return {
-          '--size': `${this.size}px`,
-        };
-      },
-    },
+    emits: [],
     data() {
       return {
         imageUrls: [
           `/api/v1/item/${this.itemId}/tiles/thumbnail?width=${this.size}&height=${this.size}`,
         ],
       };
+    },
+    computed: {
+      cssVars() {
+        return {
+          '--size': `${this.size}px`,
+        };
+      },
     },
     async mounted() {
       const imageLabels = await getAssociatedLabels(this.itemId);
@@ -38,7 +40,6 @@
         );
       });
     },
-    emits: [],
     methods: {},
   });
 </script>

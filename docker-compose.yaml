@@ -10,15 +10,17 @@ services:
   broker:
     image: rabbitmq:3.8
     environment:
-      - RABBITMQ_DEFAULT_USER=user
-      - RABBITMQ_DEFAULT_PASS=password
-      - RABBITMQ_USER=user
-      - RABBITMQ_PASS=password
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASS=guest
       - RABBITMQ_HOST=broker
     ports:
-      - 6379:6379
-  backend:
-    build: ./backend
+      - 5672:5672
+  worker:
+    build:
+      context: ./backend
+      target: worker
     depends_on:
       - mongo
       - broker
@@ -28,13 +30,38 @@ services:
       - 8081:8080
     profiles:
       - demo
-  frontend:
+  girder:
+    build:
+      context: ./backend
+      target: girder
+    depends_on:
+      - mongo
+      - worker
+    environment:
+      - MONGO_DATABASE=mongodb://mongo:27017/girder
+    ports:
+      - 8081:8080
+    profiles:
+      - demo
+  nginx:
     build: ./frontend
     environment:
-      - BACKEND_HOST=http://backend:8080
+      - BACKEND_HOST=http://girder:8080
     depends_on:
-      - backend
+      - girder
     ports:
       - 8080:8080
     profiles:
       - demo
+  test:
+    build:
+      context: ./backend
+      target: test
+    depends_on:
+      - mongo
+    environment:
+      - MONGO_DATABASE=mongodb://mongo:27017
+    ports:
+      - 8081:8080
+    profiles:
+      - test

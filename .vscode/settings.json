@@ -1,0 +1,54 @@
+{
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.python",
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": true
+    }
+  },
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll": true
+  },
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "eslint.workingDirectories": ["./frontend"],
+  "files.exclude": {
+    "**/.direnv/": true,
+    "**/.mypy_cache/": true,
+    "**/.pytest_cache/": true,
+    "**/__pycache__/": true,
+    "**/node_modules/": true
+  },
+  "files.associations": {
+    "*.css": "postcss"
+  },
+  "prettier.enable": true,
+  "prettier.configPath": "./frontend/.prettierrc.json",
+  "prettier.documentSelectors": [
+    "**/*.vue",
+    "**/*.ts",
+    "**/*.js",
+    "**/*.json",
+    "**/*.html",
+    "**/*.css"
+  ],
+  "prettier.prettierPath": "./frontend/node_modules/prettier",
+  "python.formatting.provider": "black",
+  "python.linting.flake8Enabled": true,
+  "python.linting.pylintEnabled": false,
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.memory.keepLibraryAst": true,
+  "python.linting.mypyEnabled": true,
+  "python.analysis.completeFunctionParens": true,
+  "python.analysis.diagnosticMode": "workspace",
+  "python.autoComplete.addBrackets": true,
+  "typescript.tsdk": "./frontend/node_modules/typescript/lib",
+  "volar.tsPlugin": true,
+  "volar.tsPluginStatus": false,
+  "python.linting.cwd": "./backend",
+  "nixEnvSelector.suggestion": false,
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv",
+  "nixEnvSelector.nixFile": "${workspaceRoot}/shell.nix"
+}

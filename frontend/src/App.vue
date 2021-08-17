@@ -11,10 +11,11 @@
 </template>
 
 <script lang="ts">
+  import { defineComponent } from 'vue';
+
   import Header from './components/Header.vue';
   import PageTitle from './components/PageTitle.vue';
   import Sidebar from './components/Sidebar.vue';
-  import { defineComponent } from 'vue';
 
   export default defineComponent({
     name: 'App',

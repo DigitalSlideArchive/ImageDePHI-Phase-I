@@ -1,9 +1,10 @@
 <template>
-  <div><Carousel item-id="60d6f0e194e55ac87969c198"></Carousel></div>
+  <div><Carousel item-id="60d6f0e194e55ac87969c198"> </Carousel></div>
 </template>
 
 <script lang="ts">
   import { defineComponent } from 'vue';
+
   import Carousel from '../components/Carousel.vue';
 
   export default defineComponent({

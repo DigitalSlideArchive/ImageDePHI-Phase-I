@@ -1,26 +1,26 @@
 <template>
   <PageTitle title="Login"></PageTitle>
   <div class="form-signin">
-    <form v-on:submit.prevent="onSubmit">
+    <form @submit.prevent="onSubmit">
       <h1 class="h3 mb-3 fw-normal">Please sign in</h1>
 
       <div class="form-floating">
         <input
           id="floatingInput"
+          v-model="username"
           type="username"
           class="form-control"
           placeholder="username"
-          v-model="username"
         />
         <label for="floatingInput">User name</label>
       </div>
       <div class="form-floating">
         <input
           id="floatingPassword"
+          v-model="password"
           type="password"
           class="form-control"
           placeholder="Password"
-          v-model="password"
         />
         <label for="floatingPassword">Password</label>
       </div>
@@ -34,6 +34,7 @@
 
 <script lang="ts">
   import { defineComponent } from 'vue';
+
   import PageTitle from '../components/PageTitle.vue';
 
   export default defineComponent({
@@ -47,8 +48,8 @@
     },
     methods: {
       async onSubmit() {
-        const username = this.username;
-        const password = this.password;
+        const { username } = this;
+        const { password } = this;
         await this.$store.dispatch('user/login', { username, password });
         this.$router.push('/');
       },

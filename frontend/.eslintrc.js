@@ -25,13 +25,14 @@ module.exports = {
     'sort-vars': 'error',
     'simple-import-sort/imports': 'error',
     'simple-import-sort/exports': 'error',
-    'simple-import-sort/exports': 'error',
     'vue/no-mutating-props': 'off',
+    'vue/script-setup-uses-vars': 'on'
   },
   parserOptions: {
     tsconfigRootDir: __dirname,
     parser: '@typescript-eslint/parser',
     project: 'tsconfig.json',
+    extraFileExtensions: ['.vue'],
   },
   settings: {
     'import/resolver': {

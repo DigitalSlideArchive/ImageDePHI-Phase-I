@@ -31,11 +31,12 @@
 
 <script lang="ts">
   import geo from 'geojs';
+  import { defineComponent, PropType } from 'vue';
+
   import api from '../api';
+  import { GeoJSON, TileMetadata } from '../types';
   import AnnotatorRedactionList from './AnnotatorRedactionList.vue';
   import Carousel from './Carousel.vue';
-  import { GeoJSON, TileMetadata } from '../types';
-  import { defineComponent, PropType } from 'vue';
 
   export default defineComponent({
     name: 'AnnotatorMap',
