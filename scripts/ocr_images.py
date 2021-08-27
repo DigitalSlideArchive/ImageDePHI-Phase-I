@@ -13,16 +13,15 @@ import re
 import sys
 import time
 
+import large_image
 import PIL.Image
 import PIL.ImageOps
 import psutil
 import pytesseract
 import yaml
 
-import large_image
-
 logger = logging.getLogger('large_image')
-logger.setLevel(1000)
+logger.setLevel(logging.CRITICAL)
 
 start_time = time.time()
 
